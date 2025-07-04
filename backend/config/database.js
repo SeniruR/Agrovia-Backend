@@ -4,11 +4,11 @@ const path = require('path');
 
 // Database configuration
 const dbConfig = {
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: 'agrovia-sheharagamage2002-1cc3.c.aivencloud.com',
+  user: 'avnadmin',
+  password: 'AVNS_iOtAXIKDXzwb0S4k4dm',
+  database: 'defaultdb',
+  port: 12267,
   ssl: {
     // For development, allow self-signed certificates
     // For production, download the CA certificate from Aiven and use it
