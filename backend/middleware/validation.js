@@ -61,9 +61,25 @@ const validate = (schema) => {
   };
 };
 
+// Buyer registration validation schema (no organization_committee_number required)
+const registerBuyerSchema = Joi.object({
+  name: Joi.string().min(2).max(255).required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).max(128).required(),
+  contact_number: Joi.string().pattern(/^[0-9+\-\s()]+$/).min(10).max(20).required(),
+  district: Joi.string().min(2).max(100).required(),
+  nic_number: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
+  company_name: Joi.string().min(2).max(255).required(),
+  company_type: Joi.string().min(2).max(100).required(),
+  company_address: Joi.string().allow('').max(500),
+  profile_image: Joi.any(),
+  payment_offer: Joi.string().allow('').max(100)
+});
+
 module.exports = {
   registerFarmerSchema,
   registerCommitteeMemberSchema,
+  registerBuyerSchema,
   loginSchema,
   organizationSchema,
   validate

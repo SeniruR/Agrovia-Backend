@@ -1,11 +1,12 @@
 const express = require('express');
 const upload = require('../config/upload');
 const { authLimiter } = require('../middleware/rateLimiter');
-const { validate, registerFarmerSchema, registerCommitteeMemberSchema, loginSchema } = require('../middleware/validation');
+const { validate, registerFarmerSchema, registerCommitteeMemberSchema, registerBuyerSchema, loginSchema } = require('../middleware/validation');
 const { authenticate, authorize } = require('../middleware/auth');
 const {
   registerFarmer,
   registerCommitteeMember,
+  registerBuyer,
   login,
   getProfile,
   getAllUsers
@@ -30,6 +31,15 @@ router.post('/register/farmer',
   coerceFarmerFields, // <-- coerce land_size to number
   validate(registerFarmerSchema),
   registerFarmer
+);
+
+
+// Buyer registration: must handle file upload before validation
+router.post('/register/buyer',
+  authLimiter,
+  upload.single('profile_image'),
+  validate(registerBuyerSchema),
+  registerBuyer
 );
 
 router.post('/register/committee-member',
