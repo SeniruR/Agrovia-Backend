@@ -33,9 +33,9 @@ class User {
       `;
       const userValues = [
         full_name, email, password_hash, phone_number, district, nic,
-        address || null, profile_image || null, user_type, 1 // always active on create
+        address ?? null, profile_image ?? null, user_type, 1 // always active on create
       ];
-  
+
       try {
         const [userResult] = await pool.execute(userQuery, userValues);
         const userId = userResult.insertId;
@@ -51,10 +51,16 @@ class User {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `;
           const farmerValues = [
-            userId, land_size || null, description || null,
-            division_gramasewa_number || null, organization_committee_number || null,
-            farming_experience || null, cultivated_crops || null, irrigation_system || null,
-            soil_type || null, farming_certifications || null
+            userId,
+            land_size !== undefined ? land_size : null,
+            description !== undefined ? description : null,
+            division_gramasewa_number !== undefined ? division_gramasewa_number : null,
+            organization_committee_number !== undefined ? organization_committee_number : null,
+            farming_experience !== undefined ? farming_experience : null,
+            cultivated_crops !== undefined ? cultivated_crops : null,
+            irrigation_system !== undefined ? irrigation_system : null,
+            soil_type !== undefined ? soil_type : null,
+            farming_certifications !== undefined ? farming_certifications : null
           ];
           const [farmerResult] = await pool.execute(farmerQuery, farmerValues);
           console.log('Farmer details insert result:', farmerResult);
