@@ -100,8 +100,7 @@ class CropPost {
       values.push(parseFloat(filters.max_price));
     }
 
-    query += ' ORDER BY cp.created_at DESC LIMIT ? OFFSET ?';
-    values.push(limit, offset);
+    query += ` ORDER BY cp.created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
     try {
       const [posts] = await pool.execute(query, values);
@@ -188,11 +187,11 @@ class CropPost {
       SELECT * FROM crop_posts
       WHERE farmer_id = ? AND status != 'deleted'
       ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
     try {
-      const [posts] = await pool.execute(query, [farmerId, limit, offset]);
+      const [posts] = await pool.execute(query, [farmerId]);
       
       const parsedPosts = posts.map(post => ({
         ...post,
