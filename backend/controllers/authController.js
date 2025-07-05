@@ -1,3 +1,67 @@
+// Register buyer
+const registerBuyer = async (req, res, next) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      contact_number,
+      district,
+      nic_number,
+      company_name,
+      company_type,
+      company_address,
+      payment_offer
+    } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'User with this email already exists' });
+    }
+
+    // Check if NIC already exists
+    const existingNIC = await User.findByNIC(nic_number);
+    if (existingNIC) {
+      return res.status(400).json({ success: false, message: 'User with this NIC number already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
+    // Create user
+    const userData = {
+      full_name: name,
+      email,
+      password_hash: hashedPassword,
+      phone_number: contact_number,
+      district,
+      nic: nic_number,
+      address: company_address || null,
+      profile_image: req.file ? req.file.filename : null,
+      user_type: 2 // 2 = buyer
+    };
+
+    const result = await User.create(userData);
+    // Support both possible return keys from User.create
+    const userId = result.user_id || result.insertId || result.id;
+
+    // Insert buyer-specific data
+    const Buyer = require('../models/Buyer');
+    await Buyer.create({
+      user_id: userId,
+      company_name,
+      company_type,
+      company_address,
+      profile_image: req.file ? req.file.filename : null,
+      payment_offer
+    });
+
+    res.status(201).json({ success: true, message: 'Buyer registered successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
@@ -262,4 +326,6 @@ module.exports = {
   login,
   getProfile,
   getAllUsers
+,
+  registerBuyer
 };
