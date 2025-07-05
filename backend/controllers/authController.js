@@ -1,3 +1,78 @@
+// Register shop owner
+const ShopOwner = require('../models/ShopOwner');
+const registerShopOwner = async (req, res, next) => {
+  try {
+    const {
+      full_name,
+      email,
+      password,
+      phone_number,
+      district,
+      nic,
+      address,
+      shop_name,
+      business_registration_number,
+      shop_address,
+      shop_phone_number,
+      shop_email,
+      shop_description,
+      shop_category,
+      operating_hours,
+      opening_days,
+      delivery_areas
+    } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'User with this email already exists' });
+    }
+    // Check if NIC already exists
+    const existingNIC = await User.findByNIC(nic);
+    if (existingNIC) {
+      return res.status(400).json({ success: false, message: 'User with this NIC number already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
+    // Create user
+    const userData = {
+      full_name,
+      email,
+      password_hash: hashedPassword,
+      phone_number,
+      district,
+      nic,
+      address: address || null,
+      profile_image: req.file ? req.file.filename : null,
+      user_type: 3 // 3 = shop owner
+    };
+    const result = await User.create(userData);
+    const userId = result.user_id || result.insertId || result.id;
+
+    // Insert shop owner-specific data
+    await ShopOwner.create({
+      user_id: userId,
+      shop_name,
+      business_registration_number,
+      shop_address,
+      shop_phone_number,
+      shop_email,
+      shop_description,
+      shop_category,
+      operating_hours,
+      opening_days,
+      delivery_areas,
+      shop_license: req.files && req.files.shop_license ? req.files.shop_license[0].filename : null,
+      shop_image: req.files && req.files.shop_image ? req.files.shop_image[0].filename : null
+    });
+
+    res.status(201).json({ success: true, message: 'Shop owner registered successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
 // Register buyer
 const registerBuyer = async (req, res, next) => {
   try {
@@ -325,7 +400,7 @@ module.exports = {
   registerCommitteeMember,
   login,
   getProfile,
-  getAllUsers
-,
-  registerBuyer
+  getAllUsers,
+  registerBuyer,
+  registerShopOwner
 };
