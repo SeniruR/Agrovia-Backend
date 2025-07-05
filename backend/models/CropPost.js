@@ -321,17 +321,17 @@ class CropPost {
   // Get crop statistics
   static async getStatistics() {
     const queries = {
-      total: 'SELECT COUNT(*) as count FROM crop_posts WHERE status = "active"',
-      by_category: 'SELECT crop_category, COUNT(*) as count FROM crop_posts WHERE status = "active" GROUP BY crop_category',
-      by_district: 'SELECT district, COUNT(*) as count FROM crop_posts WHERE status = "active" GROUP BY district ORDER BY count DESC LIMIT 10',
-      recent: 'SELECT COUNT(*) as count FROM crop_posts WHERE status = "active" AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+      total: 'SELECT COUNT(*) as count FROM crop_posts WHERE status = ?',
+      by_category: 'SELECT crop_category, COUNT(*) as count FROM crop_posts WHERE status = ? GROUP BY crop_category',
+      by_district: 'SELECT district, COUNT(*) as count FROM crop_posts WHERE status = ? GROUP BY district ORDER BY count DESC LIMIT 10',
+      recent: 'SELECT COUNT(*) as count FROM crop_posts WHERE status = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
     };
 
     try {
-      const [totalResult] = await pool.execute(queries.total);
-      const [categoryResult] = await pool.execute(queries.by_category);
-      const [districtResult] = await pool.execute(queries.by_district);
-      const [recentResult] = await pool.execute(queries.recent);
+      const [totalResult] = await pool.execute(queries.total, ['active']);
+      const [categoryResult] = await pool.execute(queries.by_category, ['active']);
+      const [districtResult] = await pool.execute(queries.by_district, ['active']);
+      const [recentResult] = await pool.execute(queries.recent, ['active']);
 
       return {
         total_posts: totalResult[0].count,
