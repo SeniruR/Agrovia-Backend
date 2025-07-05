@@ -26,8 +26,8 @@ const registerFarmer = async (req, res, next) => {
       );
     }
 
-    // Check if NIC already exists
-    const existingNIC = await User.findByNIC(nic_number);
+    // Check if NIC already exists (use correct DB column)
+    const existingNIC = await User.findByNIC(req.body.nic_number || req.body.nic);
     if (existingNIC) {
       return res.status(400).json(
         formatResponse(false, 'User with this NIC number already exists')
@@ -46,16 +46,28 @@ const registerFarmer = async (req, res, next) => {
     const hashedPassword = await hashPassword(password);
 
     // Create user
+
+    // Map nic_number to nic for DB
     const userData = {
-      name,
+      full_name: name,
       email,
-      password: hashedPassword,
-      contact_number,
+      password_hash: hashedPassword,
+      phone_number: contact_number,
       district,
       land_size: parseFloat(land_size),
-      nic_number,
-      role: 'farmer',
-      organization_committee_number
+      nic: nic_number,
+      address: req.body.address || null,
+      profile_image: req.file ? req.file.filename : null,
+      user_type: 1, // assuming 1 = farmer
+      birth_date: req.body.birth_date || null,
+      description: req.body.description || null,
+      division_gramasewa_number: req.body.division_gramasewa_number || null,
+      organization_committee_number,
+      farming_experience: req.body.farming_experience || null,
+      cultivated_crops: req.body.cultivated_crops || null,
+      irrigation_system: req.body.irrigation_system || null,
+      soil_type: req.body.soil_type || null,
+      farming_certifications: req.body.farming_certifications || null
     };
 
     const result = await User.create(userData);
@@ -103,8 +115,8 @@ const registerCommitteeMember = async (req, res, next) => {
       );
     }
 
-    // Check if NIC already exists
-    const existingNIC = await User.findByNIC(nic_number);
+    // Check if NIC already exists (use correct DB column)
+    const existingNIC = await User.findByNIC(req.body.nic_number || req.body.nic);
     if (existingNIC) {
       return res.status(400).json(
         formatResponse(false, 'User with this NIC number already exists')
@@ -186,8 +198,8 @@ const login = async (req, res, next) => {
       );
     }
 
-    // Compare password
-    const isPasswordValid = await comparePassword(password, user.password);
+    // Compare password (use password_hash column)
+    const isPasswordValid = await comparePassword(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(401).json(
         formatResponse(false, 'Invalid email or password')

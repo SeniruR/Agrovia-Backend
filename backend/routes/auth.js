@@ -14,8 +14,20 @@ const {
 const router = express.Router();
 
 // Public routes
+// Middleware to coerce land_size to number (for Joi validation)
+function coerceFarmerFields(req, res, next) {
+  if (req.body && typeof req.body.land_size === 'string') {
+    const parsed = parseFloat(req.body.land_size);
+    if (!isNaN(parsed)) req.body.land_size = parsed;
+  }
+  next();
+}
+
+// Farmer registration: must handle file upload before validation
 router.post('/register/farmer', 
   authLimiter,
+  upload.single('profile_image'),
+  coerceFarmerFields, // <-- coerce land_size to number
   validate(registerFarmerSchema),
   registerFarmer
 );

@@ -3,46 +3,69 @@ const { pool } = require('../config/database');
 class User {
   // Create a new user
   static async create(userData) {
-    const {
-      name,
-      email,
-      password,
-      contact_number,
-      district,
-      land_size,
-      nic_number,
-      role,
-      organization_committee_number,
-      certificate_path
-    } = userData;
+      const {
+        full_name,
+        email,
+        password_hash,
+        phone_number,
+        district,
+        nic,
+        address,
+        profile_image,
+        user_type,
+        land_size,
+        birth_date,
+        description,
+        division_gramasewa_number,
+        organization_committee_number,
+        farming_experience,
+        cultivated_crops,
+        irrigation_system,
+        soil_type,
+        farming_certifications
+      } = userData;
+  
+      const userQuery = `
+        INSERT INTO users (
+          full_name, email, password_hash, phone_number, district, nic,
+          address, profile_image, user_type, is_active
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      const userValues = [
+        full_name, email, password_hash, phone_number, district, nic,
+        address || null, profile_image || null, user_type, 1 // always active on create
+      ];
+  
+      try {
+        const [userResult] = await pool.execute(userQuery, userValues);
+        const userId = userResult.insertId;
+        console.log('User insert result:', userResult);
 
-    const query = `
-      INSERT INTO users (
-        name, email, password, contact_number, district, land_size, 
-        nic_number, role, organization_committee_number, certificate_path
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+        if (user_type === 1) {
+          const farmerQuery = `
+            INSERT INTO farmer_details (
+              user_id, land_size, description,
+              division_gramasewa_number, organization_committee_number,
+              farming_experience, cultivated_crops, irrigation_system,
+              soil_type, farming_certifications
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `;
+          const farmerValues = [
+            userId, land_size || null, description || null,
+            division_gramasewa_number || null, organization_committee_number || null,
+            farming_experience || null, cultivated_crops || null, irrigation_system || null,
+            soil_type || null, farming_certifications || null
+          ];
+          const [farmerResult] = await pool.execute(farmerQuery, farmerValues);
+          console.log('Farmer details insert result:', farmerResult);
+        }
 
-    const values = [
-      name,
-      email,
-      password,
-      contact_number,
-      district,
-      land_size || null,
-      nic_number,
-      role,
-      organization_committee_number || null,
-      certificate_path || null
-    ];
-
-    try {
-      const [result] = await pool.execute(query, values);
-      return result;
-    } catch (error) {
-      throw error;
+        return { user_id: userId };
+      } catch (error) {
+        console.error('User.create error:', error);
+        throw error;
+      }
     }
-  }
 
   // Find user by email
   static async findByEmail(email) {
@@ -69,11 +92,10 @@ class User {
   }
 
   // Find user by NIC number
-  static async findByNIC(nic_number) {
-    const query = 'SELECT * FROM users WHERE nic_number = ?';
-    
+  static async findByNIC(nic) {
+    const query = 'SELECT * FROM users WHERE nic = ?';
     try {
-      const [rows] = await pool.execute(query, [nic_number]);
+      const [rows] = await pool.execute(query, [nic]);
       return rows[0];
     } catch (error) {
       throw error;

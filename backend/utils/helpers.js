@@ -23,7 +23,8 @@ const generateRandomString = (length = 32) => {
 
 // Sanitize user data for response
 const sanitizeUser = (user) => {
-  const { password, ...sanitizedUser } = user;
+  // Remove both password and password_hash fields
+  const { password, password_hash, ...sanitizedUser } = user;
   return sanitizedUser;
 };
 

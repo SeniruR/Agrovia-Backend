@@ -54,24 +54,43 @@ const createTables = async (connection) => {
       )
     `);
 
-    // Users table
+
+    // Users table (no organization_committee_number, no foreign key)
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
+        full_name VARCHAR(255) NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        contact_number VARCHAR(20) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        phone_number VARCHAR(20) NOT NULL,
         district VARCHAR(100) NOT NULL,
-        land_size DECIMAL(10,2),
-        nic_number VARCHAR(20) UNIQUE NOT NULL,
-        role ENUM('farmer', 'organization_committee_member', 'admin', 'moderator', 'viewer') NOT NULL,
-        organization_committee_number VARCHAR(50),
-        certificate_path VARCHAR(500),
+        nic VARCHAR(20) UNIQUE NOT NULL,
+        address VARCHAR(500),
+        profile_image VARCHAR(500),
+        user_type INT NOT NULL,
         is_verified BOOLEAN DEFAULT FALSE,
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Farmer details table (organization_committee_number foreign key here)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS farmer_details (
+        user_id INT PRIMARY KEY,
+        land_size DECIMAL(10,2),
+        birth_date DATE,
+        description TEXT,
+        division_gramasewa_number VARCHAR(100),
+        organization_committee_number VARCHAR(100),
+        farming_experience VARCHAR(50),
+        cultivated_crops VARCHAR(100),
+        irrigation_system VARCHAR(100),
+        soil_type VARCHAR(100),
+        farming_certifications TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (organization_committee_number) REFERENCES organizations(committee_number) ON DELETE SET NULL
       )
     `);
@@ -82,18 +101,12 @@ const createTables = async (connection) => {
     } catch (err) {
       if (!err.message.includes('Duplicate key name')) throw err;
     }
-    
     try {
-      await connection.execute(`CREATE INDEX idx_users_role ON users(role)`);
+      await connection.execute(`CREATE INDEX idx_users_user_type ON users(user_type)`);
     } catch (err) {
       if (!err.message.includes('Duplicate key name')) throw err;
     }
-    
-    try {
-      await connection.execute(`CREATE INDEX idx_users_organization ON users(organization_committee_number)`);
-    } catch (err) {
-      if (!err.message.includes('Duplicate key name')) throw err;
-    }
+
 
     console.log('✅ Database tables created/verified successfully');
   } catch (error) {

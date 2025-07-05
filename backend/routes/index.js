@@ -1,6 +1,8 @@
 const express = require('express');
+
 const authRoutes = require('./auth');
 const organizationRoutes = require('./organizations');
+const farmerRoutes = require('./farmers');
 
 const router = express.Router();
 
@@ -15,7 +17,9 @@ router.get('/health', (req, res) => {
 });
 
 // API routes
+
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
+router.use('/farmers', farmerRoutes);
 
 module.exports = router;

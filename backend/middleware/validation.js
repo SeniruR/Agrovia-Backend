@@ -9,7 +9,17 @@ const registerFarmerSchema = Joi.object({
   district: Joi.string().min(2).max(100).required(),
   land_size: Joi.number().positive().precision(2).required(),
   nic_number: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
-  organization_committee_number: Joi.string().min(1).max(50).required()
+  organization_committee_number: Joi.string().min(1).max(50).required(),
+  address: Joi.string().allow('').max(500),
+  profile_image: Joi.any(),
+  birth_date: Joi.string().allow(''),
+  description: Joi.string().allow('').max(1000),
+  division_gramasewa_number: Joi.string().allow('').max(100),
+  farming_experience: Joi.string().allow('').max(100),
+  cultivated_crops: Joi.string().allow('').max(100),
+  irrigation_system: Joi.string().allow('').max(100),
+  soil_type: Joi.string().allow('').max(100),
+  farming_certifications: Joi.string().allow('').max(255)
 });
 
 const registerCommitteeMemberSchema = Joi.object({
