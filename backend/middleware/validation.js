@@ -83,4 +83,28 @@ module.exports = {
   loginSchema,
   organizationSchema,
   validate
+  ,
+  // Shop owner registration validation schema
+  registerShopOwnerSchema: Joi.object({
+    full_name: Joi.string().min(2).max(255).required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().min(8).max(128).required(),
+    phone_number: Joi.string().pattern(/^[0-9]{10}$/).required(),
+    district: Joi.string().min(2).max(100).required(),
+    nic: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
+    address: Joi.string().allow('').max(500),
+    profile_image: Joi.any(),
+    shop_name: Joi.string().min(2).max(255).required(),
+    business_registration_number: Joi.string().min(2).max(255).required(),
+    shop_address: Joi.string().min(2).max(500).required(),
+    shop_phone_number: Joi.string().pattern(/^[0-9]{10}$/).required(),
+    shop_email: Joi.string().email().allow(''),
+    shop_description: Joi.string().allow('').max(1000),
+    shop_category: Joi.string().min(2).max(100).required(),
+    operating_hours: Joi.string().min(2).max(100).required(),
+    opening_days: Joi.array().items(Joi.string()).min(1).required(),
+    delivery_areas: Joi.string().allow('').max(500),
+    shop_license: Joi.any(),
+    shop_image: Joi.any()
+  })
 };
