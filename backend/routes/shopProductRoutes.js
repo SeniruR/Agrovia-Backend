@@ -1,5 +1,7 @@
-const express=require('express')
-const router=express.Router();
+const express = require('express');
+const router = express.Router();
+
+console.log('ShopProducts route loaded');
 
 const shopProductController = require('../controllers/shopProductController');
 const validateShopProduct = require('../middleware/validateShopProduct');

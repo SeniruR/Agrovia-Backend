@@ -19,7 +19,7 @@ try{
       product_description,
       usage_history
     } = req.body; 
-
+ console.log("📦 Incoming data:", req.body);
     if(!shop_name||!owner_name||!email|| !product_name || !price) {
       return res.status(400).json({ error: 'Missing required fields' });
     }

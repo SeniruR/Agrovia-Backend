@@ -21,5 +21,6 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
 router.use('/farmers', farmerRoutes);
+router.use('/shop-products', shopProductRoutes);
 
 module.exports = router;
