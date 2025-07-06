@@ -5,9 +5,10 @@ const ShopProductModel = {
     const [result] = await pool.execute(
       `INSERT INTO shop_products (
         shop_name, owner_name, email, phone_no, shop_address, city,
-        product_name, brand, category, season, price, unit,
-        available_quantity, product_description, usage_history,product_type,images,organic_certified,features
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        product_type, product_name, brand, category, season, price,
+        unit, available_quantity, product_description, features,
+        usage_history, organic_certified, terms_accepted, images
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         product.shop_name,
         product.owner_name,
@@ -15,6 +16,7 @@ const ShopProductModel = {
         product.phone_no,
         product.shop_address,
         product.city,
+        product.product_type,      // corrected order
         product.product_name,
         product.brand,
         product.category,
@@ -23,11 +25,11 @@ const ShopProductModel = {
         product.unit,
         product.available_quantity,
         product.product_description,
-        product.usage_history,
         product.features,
-        product.organicCertified,
-        product.productType,
-        JSON.stringify(product.images || [])
+        product.usage_history,
+        product.organic_certified,
+        product.terms_accepted,
+        product.images
       ]
     );
     return result;
