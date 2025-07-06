@@ -29,6 +29,15 @@ const sampleData = {
       district: "Colombo",
       nic_number: "199012345678",
       role: "admin"
+    },
+    {
+      name: "Sarath Perera",
+      email: "farmer@gmail.com",
+      password: "farmer123",
+      contact_number: "0771234567",
+      district: "Colombo",
+      nic_number: "199112345679",
+      role: "farmer"
     }
   ]
 };
@@ -63,10 +72,11 @@ const insertSampleData = async () => {
     for (const user of sampleData.users) {
       try {
         const hashedPassword = await bcrypt.hash(user.password, 12);
+        const userType = user.role === 'admin' ? 3 : 1; // 3 = admin, 1 = farmer
         await connection.execute(
-          `INSERT INTO users (name, email, password, contact_number, district, nic_number, role, is_verified, is_active) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, true, true)`,
-          [user.name, user.email, hashedPassword, user.contact_number, user.district, user.nic_number, user.role]
+          `INSERT INTO users (full_name, email, password_hash, phone_number, district, nic, user_type, address) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [user.name, user.email, hashedPassword, user.contact_number, user.district, user.nic_number, userType, 'Sample Address, ' + user.district]
         );
         console.log(`✅ Created user: ${user.name} (${user.role})`);
       } catch (error) {
@@ -87,7 +97,11 @@ You can now use these credentials to test the API:
    Email: admin@agrovia.com
    Password: admin123456
 
-🏢 Available Organizations:
+� Farmer Login:
+   Email: farmer@gmail.com
+   Password: farmer123
+
+�🏢 Available Organizations:
    - ORG001: Colombo Farmers Association
    - ORG002: Gampaha Agricultural Society  
    - ORG003: Kandy Organic Farmers Union
