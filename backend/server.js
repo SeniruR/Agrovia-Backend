@@ -25,7 +25,7 @@ app.use(helmet());
 
 
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite default port
+  origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
   credentials: true
 }));
 // CORS configuration
@@ -45,8 +45,9 @@ app.use(generalLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files (uploaded documents)
+// Serve static files (uploaded documents and crop images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/crop-images', express.static(path.join(__dirname, 'uploads/crop-images')));
 
 // API routes
 app.use('/api/v1', routes);
