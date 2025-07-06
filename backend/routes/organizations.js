@@ -1,39 +1,29 @@
 const express = require('express');
-const { validate, organizationSchema } = require('../middleware/validation');
-const { authenticate, authorize } = require('../middleware/auth');
-const {
-  createOrganization,
-  getAllOrganizations,
-  getOrganizationByCommitteeNumber,
-  updateOrganization,
-  deleteOrganization
-} = require('../controllers/organizationController');
-
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const organizationController = require('../controllers/organizationController');
 
-// Public routes
-router.get('/', getAllOrganizations);
-router.get('/:committee_number', getOrganizationByCommitteeNumber);
+// File upload config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../uploads/organizations'));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext);
+  }
+});
+const upload = multer({ storage });
 
-// Protected routes - Admin only
-router.post('/',
-  authenticate,
-  authorize('admin'),
-  validate(organizationSchema),
-  createOrganization
+// Public: Register organization (used by farmer signup)
+router.post(
+  '/',
+  upload.single('letterofProof'),
+  organizationController.registerOrganization
 );
 
-router.put('/:id',
-  authenticate,
-  authorize('admin'),
-  validate(organizationSchema),
-  updateOrganization
-);
-
-router.delete('/:id',
-  authenticate,
-  authorize('admin'),
-  deleteOrganization
-);
+// Public: Search organizations by name
+router.get('/search', organizationController.searchOrganizations);
 
 module.exports = router;
