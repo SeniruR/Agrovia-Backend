@@ -17,7 +17,7 @@ class User {
         birth_date,
         description,
         division_gramasewa_number,
-        organization_committee_number,
+        organization_id,
         farming_experience,
         cultivated_crops,
         irrigation_system,
@@ -45,7 +45,7 @@ class User {
           const farmerQuery = `
             INSERT INTO farmer_details (
               user_id, land_size, description,
-              division_gramasewa_number, organization_committee_number,
+              division_gramasewa_number, organization_id,
               farming_experience, cultivated_crops, irrigation_system,
               soil_type, farming_certifications
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -55,7 +55,7 @@ class User {
             land_size !== undefined ? land_size : null,
             description !== undefined ? description : null,
             division_gramasewa_number !== undefined ? division_gramasewa_number : null,
-            organization_committee_number !== undefined ? organization_committee_number : null,
+            userData.organization_id !== undefined ? userData.organization_id : null,
             farming_experience !== undefined ? farming_experience : null,
             cultivated_crops !== undefined ? cultivated_crops : null,
             irrigation_system !== undefined ? irrigation_system : null,
@@ -66,7 +66,7 @@ class User {
           console.log('Farmer details insert result:', farmerResult);
         }
 
-        return { user_id: userId };
+        return { insertId: userId };
       } catch (error) {
         console.error('User.create error:', error);
         throw error;

@@ -9,7 +9,7 @@ const registerFarmerSchema = Joi.object({
   district: Joi.string().min(2).max(100).required(),
   land_size: Joi.number().positive().precision(2).required(),
   nic_number: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
-  organization_committee_number: Joi.string().min(1).max(50).required(),
+  organization_id: Joi.number().integer().positive().allow(null, '').optional(),
   address: Joi.string().allow('').max(500),
   profile_image: Joi.any(),
   birth_date: Joi.string().allow(''),
