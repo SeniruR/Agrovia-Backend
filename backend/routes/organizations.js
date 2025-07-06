@@ -4,16 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const organizationController = require('../controllers/organizationController');
 
-// File upload config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads/organizations'));
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext);
-  }
-});
+// File upload config for DB BLOB storage
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Public: Register organization (used by farmer signup)

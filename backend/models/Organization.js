@@ -13,33 +13,35 @@ class Organization {
   }
   // Create a new organization (new fields)
   static async create(org) {
-    const {
-      org_name,
-      org_area,
-      gn_name,
-      gn_contact,
-      letter_of_proof,
-      established_date,
-      org_description,
-      contactperson_id
-    } = org;
+    // Ensure all fields are never undefined (use null for missing/optional fields)
+  const {
+    org_name = null,
+    org_area = null,
+    gn_name = null,
+    gn_contactno = null,
+    letter_of_proof = null,
+    letter_of_proof_file = null,
+    est = null,
+    org_description = null,
+    org_contactperson_id = null
+  } = org;
 
-    const query = `
-      INSERT INTO organizations
-        (org_name, org_area, gn_name, gn_contact, letter_of_proof, established_date, org_description, contactperson_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+  const query = `
+    INSERT INTO organizations
+      (org_name, org_area, gn_name, gn_contactno, letter_of_proof_file, est, org_description, org_contactperson_id, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+  `;
 
     try {
       const [result] = await pool.execute(query, [
         org_name,
         org_area,
         gn_name,
-        gn_contact,
-        letter_of_proof,
-        established_date,
+        gn_contactno,
+        letter_of_proof_file,
+        est,
         org_description,
-        contactperson_id
+        org_contactperson_id
       ]);
       return result;
     } catch (error) {
