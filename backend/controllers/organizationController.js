@@ -14,10 +14,12 @@ const registerOrganization = async (req, res, next) => {
       contactperson_id
     } = req.body;
 
-    // File upload
-    let letterOfProofPath = null;
+    // File upload (memoryStorage: only buffer and originalname are available)
+    let letterOfProofFile = null;
+    let letterOfProofName = null;
     if (req.file) {
-      letterOfProofPath = req.file.filename;
+      letterOfProofFile = req.file.buffer;
+      letterOfProofName = req.file.originalname;
     }
 
     // Validate required fields
@@ -26,9 +28,8 @@ const registerOrganization = async (req, res, next) => {
       !area ||
       !govijanasewaniladariname ||
       !govijanasewaniladariContact ||
-      !letterOfProofPath ||
-      !establishedDate ||
-      !contactperson_id
+      !letterOfProofFile ||
+      !establishedDate
     ) {
       return res.status(400).json({ success: false, message: 'Missing required fields.' });
     }
@@ -38,9 +39,10 @@ const registerOrganization = async (req, res, next) => {
       org_name: organizationName,
       org_area: area,
       gn_name: govijanasewaniladariname,
-      gn_contact: govijanasewaniladariContact,
-      letter_of_proof: letterOfProofPath,
-      established_date: establishedDate,
+      gn_contactno: govijanasewaniladariContact,
+      letter_of_proof: letterOfProofName, // store original filename for reference
+      letter_of_proof_file: letterOfProofFile,
+      est: establishedDate,
       org_description: organizationDescription,
       contactperson_id
     });
