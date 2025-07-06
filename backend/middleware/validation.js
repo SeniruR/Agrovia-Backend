@@ -69,8 +69,8 @@ const registerBuyerSchema = Joi.object({
   contact_number: Joi.string().pattern(/^[0-9+\-\s()]+$/).min(10).max(20).required(),
   district: Joi.string().min(2).max(100).required(),
   nic_number: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
-  company_name: Joi.string().min(2).max(255).required(),
-  company_type: Joi.string().min(2).max(100).required(),
+  company_name: Joi.string().min(2).max(255).allow('').optional(),
+  company_type: Joi.string().min(2).max(100).allow('').optional(),
   company_address: Joi.string().allow('').max(500),
   profile_image: Joi.any(),
   payment_offer: Joi.string().allow('').max(100)
