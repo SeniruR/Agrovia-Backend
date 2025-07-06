@@ -3,7 +3,7 @@ const express = require('express');
 const authRoutes = require('./auth');
 const organizationRoutes = require('./organizations');
 const farmerRoutes = require('./farmers');
-
+const shopProductRoutes = require('./shopProducts');
 const router = express.Router();
 
 // Health check endpoint
