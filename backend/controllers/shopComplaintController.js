@@ -13,7 +13,7 @@ exports.createComplaint = async (req, res, next) => {
       category,
       orderNumber,
       purchaseDate,
-      status,
+      
       attachments
     } = req.body;
 
@@ -28,7 +28,7 @@ exports.createComplaint = async (req, res, next) => {
       category,
       orderNumber,
       purchaseDate,
-      status,
+ 
       attachments
     });
     res.status(201).json({ success: true, message: 'Complaint submitted', id: result.insertId });
