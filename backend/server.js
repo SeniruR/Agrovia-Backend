@@ -22,6 +22,7 @@ const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
+app.use('/api/shop-products', shopProductRoutes);
 
 
 app.use(cors({
