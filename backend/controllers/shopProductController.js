@@ -127,12 +127,52 @@ exports.getAllShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAll();
 
-    const formattedProducts = products.map(product => ({
-      ...product,
-      organic_certified: Boolean(product.organic_certified),
-      terms_accepted: Boolean(product.terms_accepted),
-      images: product.images ? JSON.parse(product.images) : []
-    }));
+    const formattedProducts = products.map(product => {
+      // Handle Boolean fields
+      const organic_certified = Boolean(product.organic_certified);
+      const terms_accepted = Boolean(product.terms_accepted);
+
+      let images = [];
+
+      // Case 1: If image is a Buffer (single image in BLOB column)
+      if (Buffer.isBuffer(product.images)) {
+        const base64Image = product.images.toString('base64');
+        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
+      }
+
+      // Case 2: If image is stored as a JSON string
+      else if (typeof product.images === 'string') {
+        if (typeof product.images === 'string') {
+  try {
+    const parsed = JSON.parse(product.images);
+    if (Array.isArray(parsed)) {
+      images = parsed.map(img => {
+        if (img.buffer && img.mimetype) {
+          return `data:${img.mimetype};base64,${img.buffer}`;
+        }
+        return img;
+      });
+    } else {
+      images = [parsed];
+    }
+  } catch (err) {
+    images = [product.images]; // fallback if not valid JSON
+  }
+}
+}
+
+if (Buffer.isBuffer(product.images)) {
+  const base64Image = product.images.toString('base64');
+  images = [`data:image/jpeg;base64,${base64Image}`];
+}
+
+      return {
+        ...product,
+        organic_certified,
+        terms_accepted,
+        images
+      };
+    });
 
     res.status(200).json(formattedProducts);
   } catch (error) {
@@ -143,3 +183,18 @@ exports.getAllShopProducts = async (req, res) => {
     });
   }
 };
+
+/*const getShopProductById = (req, res) => {
+  const { id } = req.params;
+  const sql = 'SELECT * FROM shop_products WHERE id = ?';
+  db.query(sql, [id], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error fetching product', error: err });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json(results[0]);
+  });
+};
+*/

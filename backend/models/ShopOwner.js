@@ -60,5 +60,8 @@ class ShopOwner {
     }
   }
 }
-
+getAll: async () => {
+    const [rows] = await pool.execute('SELECT * FROM shop_products');
+    return rows;
+  }
 module.exports = ShopOwner;
