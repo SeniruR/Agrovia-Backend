@@ -7,5 +7,6 @@ const shopProductController = require('../controllers/shopProductController');
 const validateShopProduct = require('../middleware/validateShopProduct');
 
 router.post('/', validateShopProduct, shopProductController.createShopProduct);
-router.get('/:id', shopProductController.getShopProductById);
+router.get('/', shopProductController.getAllShopProducts);
+//router.get('/shopitemid', shopProductController.getShopProductById);
 module.exports = router;

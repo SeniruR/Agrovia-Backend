@@ -127,12 +127,23 @@ exports.getAllShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAll();
 
-    const formattedProducts = products.map(product => ({
-      ...product,
-      organic_certified: Boolean(product.organic_certified),
-      terms_accepted: Boolean(product.terms_accepted),
-      images: product.images ? JSON.parse(product.images) : []
-    }));
+    const formattedProducts = products.map(product => {
+      // Handle images - they might already be parsed or might be a string
+      let images = [];
+      try {
+        images = product.images ? JSON.parse(product.images) : [];
+      } catch (e) {
+        // If parsing fails, treat it as a single image string
+        images = product.images ? [product.images] : [];
+      }
+
+      return {
+        ...product,
+        organic_certified: Boolean(product.organic_certified),
+        terms_accepted: Boolean(product.terms_accepted),
+        images: images
+      };
+    });
 
     res.status(200).json(formattedProducts);
   } catch (error) {
@@ -143,14 +154,12 @@ exports.getAllShopProducts = async (req, res) => {
     });
   }
 };
-
-const getShopProductById = (req, res) => {
+/*const getShopProductById = (req, res) => {
   const { id } = req.params;
   const sql = 'SELECT * FROM shop_products WHERE id = ?';
   db.query(sql, [id], (err, results) => {
     if (err) {
-      console.error('Error fetching product by ID:', err);
-      return res.status(500).json({ error: 'Database error' });
+      return res.status(500).json({ message: 'Error fetching product', error: err });
     }
     if (results.length === 0) {
       return res.status(404).json({ message: 'Product not found' });
@@ -158,3 +167,4 @@ const getShopProductById = (req, res) => {
     res.json(results[0]);
   });
 };
+*/
