@@ -128,20 +128,49 @@ exports.getAllShopProducts = async (req, res) => {
     const products = await ShopProductModel.getAll();
 
     const formattedProducts = products.map(product => {
-      // Handle images - they might already be parsed or might be a string
+      // Handle Boolean fields
+      const organic_certified = Boolean(product.organic_certified);
+      const terms_accepted = Boolean(product.terms_accepted);
+
       let images = [];
-      try {
-        images = product.images ? JSON.parse(product.images) : [];
-      } catch (e) {
-        // If parsing fails, treat it as a single image string
-        images = product.images ? [product.images] : [];
+
+      // Case 1: If image is a Buffer (single image in BLOB column)
+      if (Buffer.isBuffer(product.images)) {
+        const base64Image = product.images.toString('base64');
+        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
       }
+
+      // Case 2: If image is stored as a JSON string
+      else if (typeof product.images === 'string') {
+        if (typeof product.images === 'string') {
+  try {
+    const parsed = JSON.parse(product.images);
+    if (Array.isArray(parsed)) {
+      images = parsed.map(img => {
+        if (img.buffer && img.mimetype) {
+          return `data:${img.mimetype};base64,${img.buffer}`;
+        }
+        return img;
+      });
+    } else {
+      images = [parsed];
+    }
+  } catch (err) {
+    images = [product.images]; // fallback if not valid JSON
+  }
+}
+}
+
+if (Buffer.isBuffer(product.images)) {
+  const base64Image = product.images.toString('base64');
+  images = [`data:image/jpeg;base64,${base64Image}`];
+}
 
       return {
         ...product,
-        organic_certified: Boolean(product.organic_certified),
-        terms_accepted: Boolean(product.terms_accepted),
-        images: images
+        organic_certified,
+        terms_accepted,
+        images
       };
     });
 
@@ -154,6 +183,7 @@ exports.getAllShopProducts = async (req, res) => {
     });
   }
 };
+
 /*const getShopProductById = (req, res) => {
   const { id } = req.params;
   const sql = 'SELECT * FROM shop_products WHERE id = ?';
