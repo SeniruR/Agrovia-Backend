@@ -5,15 +5,9 @@ const path = require('path');
 const shopComplaintController = require('../controllers/shopComplaintController');
 
 // File upload config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads/shop-complaints'));
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext);
-  }
-});
+
+// Use memory storage for BLOB upload
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Public: Submit a new shop complaint (with file upload)
@@ -22,8 +16,12 @@ router.post('/', upload.array('attachments', 5), shopComplaintController.createC
 // Public: Get all complaints
 router.get('/', shopComplaintController.getAllComplaints);
 
-// Public: Get a single complaint by ID
+
+// Public: Get a single complaint by ID (with attachment metadata)
 router.get('/:id', shopComplaintController.getComplaintById);
+
+// Public: Download a single attachment by attachment ID
+router.get('/attachment/:attachmentId', shopComplaintController.downloadAttachment);
 
 // Public: Update a complaint
 router.put('/:id', shopComplaintController.updateComplaint);

@@ -1,7 +1,9 @@
+
 const ShopComplaint = require('../models/ShopComplaint');
+const ShopComplaintAttachment = require('../models/ShopComplaintAttachment');
 const path = require('path');
 
-// Create a new shop complaint
+// Create a new shop complaint (with multiple BLOB attachments)
 exports.createComplaint = async (req, res, next) => {
   try {
     const {
@@ -16,13 +18,7 @@ exports.createComplaint = async (req, res, next) => {
       purchaseDate
     } = req.body;
 
-    // Handle file uploads
-    let attachments = null;
-    if (req.files && req.files.length > 0) {
-      attachments = req.files.map(file => file.filename);
-    }
-
-    // Save complaint
+    // Save complaint first (no attachments)
     const result = await ShopComplaint.create({
       title,
       description,
@@ -32,10 +28,23 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate,
-      attachments
+      purchaseDate
     });
-    res.status(201).json({ success: true, message: 'Complaint submitted', id: result.insertId });
+    const complaintId = result.insertId;
+
+    // Save each attachment as a BLOB in shop_complaint_attachments
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        await ShopComplaintAttachment.create({
+          complaint_id: complaintId,
+          filename: file.originalname,
+          mimetype: file.mimetype,
+          filedata: file.buffer
+        });
+      }
+    }
+
+    res.status(201).json({ success: true, message: 'Complaint submitted', id: complaintId });
   } catch (error) {
     next(error);
   }
@@ -51,12 +60,27 @@ exports.getAllComplaints = async (req, res, next) => {
   }
 };
 
-// Get a single complaint by ID
+// Get a single complaint by ID (with attachment metadata)
 exports.getComplaintById = async (req, res, next) => {
   try {
     const complaint = await ShopComplaint.findById(req.params.id);
     if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
-    res.json(complaint);
+    // Get attachment metadata
+    const attachments = await ShopComplaintAttachment.findByComplaintId(req.params.id);
+    res.json({ ...complaint, attachments });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Download a single attachment by attachment ID
+exports.downloadAttachment = async (req, res, next) => {
+  try {
+    const attachment = await ShopComplaintAttachment.findById(req.params.attachmentId);
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+    res.setHeader('Content-Type', attachment.mimetype);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    res.send(attachment.filedata);
   } catch (error) {
     next(error);
   }
