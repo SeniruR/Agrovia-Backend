@@ -4,7 +4,6 @@ class ShopComplaint {
   // Create a new shop complaint
   static async create(complaint) {
     const {
-     // Optional: if you want to track complaint ID
       title,
       description,
       submittedBy,
@@ -13,15 +12,13 @@ class ShopComplaint {
       location,
       category,
       orderNumber,
-      purchaseDate,
-      
-      attachments // comma-separated string or JSON array
+      purchaseDate
     } = complaint;
 
     const query = `
       INSERT INTO shop_complaints
-        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date, attachments)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -33,8 +30,7 @@ class ShopComplaint {
         location ?? null,
         category ?? null,
         orderNumber ?? null,
-        purchaseDate ? purchaseDate : null,
-        attachments ? JSON.stringify(attachments) : null
+        purchaseDate ? purchaseDate : null
       ]);
       return result;
     } catch (error) {
