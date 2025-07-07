@@ -1,6 +1,73 @@
 const { pool } = require('../config/database');
 
 class UserController {
+  // Get shop owner details by user_id
+  static async getShopOwnerDetailsByUserId(req, res) {
+    try {
+      const userId = req.params.id;
+      const query = `SELECT * FROM shop_details WHERE user_id = ?`;
+      const [rows] = await pool.execute(query, [userId]);
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Shop owner details not found' });
+      }
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error('❌ Get shop owner details error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve shop owner details',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+  // Update user active status (activate/suspend)
+  static async updateUserActiveStatus(req, res) {
+    try {
+      const userId = req.params.id;
+      const { is_active } = req.body;
+      if (typeof is_active === 'undefined') {
+        return res.status(400).json({ success: false, message: 'is_active is required' });
+      }
+      const query = 'UPDATE users SET is_active = ? WHERE id = ?';
+      const [result] = await pool.execute(query, [is_active, userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      res.json({ success: true, message: 'User status updated successfully' });
+    } catch (error) {
+      console.error('❌ Update user active status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update user status',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+  // Get all users (admin)
+  static async getAllUsers(req, res) {
+    try {
+      console.log('📋 Admin get all users request received');
+      const query = `
+        SELECT u.id, u.full_name, u.email, u.phone_number, u.district, u.user_type, ut.user_type_name AS role_name, u.is_active, u.created_at
+        FROM users u
+        LEFT JOIN user_types ut ON u.user_type = ut.id
+        ORDER BY u.created_at DESC
+      `;
+      const [rows] = await pool.execute(query);
+      res.json({
+        success: true,
+        message: 'All users retrieved successfully',
+        data: rows
+      });
+    } catch (error) {
+      console.error('❌ Get all users error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve users',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
   // Get user profile
   static async getUserProfile(req, res) {
     try {
@@ -109,6 +176,54 @@ class UserController {
       res.status(500).json({
         success: false,
         message: 'Failed to update user profile',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get farmer details by user_id
+  static async getFarmerDetailsByUserId(req, res) {
+    try {
+      const userId = req.params.id;
+      // Join farmer_details with organizations to get org_name
+      const query = `
+        SELECT f.*, o.org_name
+        FROM farmer_details f
+        LEFT JOIN organizations o ON f.organization_id = o.id
+        WHERE f.user_id = ?
+      `;
+      const [rows] = await pool.execute(query, [userId]);
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Farmer details not found' });
+      }
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error('❌ Get farmer details error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve farmer details',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get buyer details by user_id
+  static async getBuyerDetailsByUserId(req, res) {
+    try {
+      const userId = req.params.id;
+      const query = `
+        SELECT * FROM buyer_details WHERE user_id = ?
+      `;
+      const [rows] = await pool.execute(query, [userId]);
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Buyer details not found' });
+      }
+      res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error('❌ Get buyer details error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve buyer details',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       });
     }
