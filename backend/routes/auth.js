@@ -1,4 +1,3 @@
-
 const express = require('express');
 const upload = require('../config/upload');
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -13,6 +12,7 @@ const {
   getAllUsers,
   registerShopOwner
 } = require('../controllers/authController');
+const { registerTransporter } = require('../controllers/transporterController');
 
 const router = express.Router();
 
@@ -67,6 +67,13 @@ router.post('/login',
   authLimiter,
   validate(loginSchema),
   login
+);
+
+// Transporter registration: must handle file upload before validation
+router.post('/register/transporter',
+  authLimiter,
+  upload.single('profile_image'),
+  registerTransporter
 );
 
 // Protected routes
