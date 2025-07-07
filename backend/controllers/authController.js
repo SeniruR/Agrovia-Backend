@@ -154,7 +154,7 @@ const registerFarmer = async (req, res, next) => {
       district,
       land_size,
       nic_number,
-      organization_committee_number
+      organization_id
     } = req.body;
 
     // Check if user already exists
@@ -173,12 +173,14 @@ const registerFarmer = async (req, res, next) => {
       );
     }
 
-    // Verify organization committee number exists
-    const organizationExists = await Organization.exists(organization_committee_number);
-    if (!organizationExists) {
-      return res.status(400).json(
-        formatResponse(false, 'Organization committee number does not exist')
-      );
+    // Optionally, verify organization_id exists (if provided)
+    if (organization_id) {
+      const organizationExists = await Organization.findById(organization_id);
+      if (!organizationExists) {
+        return res.status(400).json(
+          formatResponse(false, 'Selected organization does not exist')
+        );
+      }
     }
 
     // Hash password
@@ -201,7 +203,7 @@ const registerFarmer = async (req, res, next) => {
       birth_date: req.body.birth_date || null,
       description: req.body.description || null,
       division_gramasewa_number: req.body.division_gramasewa_number || null,
-      organization_committee_number,
+      organization_id: organization_id || null,
       farming_experience: req.body.farming_experience || null,
       cultivated_crops: req.body.cultivated_crops || null,
       irrigation_system: req.body.irrigation_system || null,

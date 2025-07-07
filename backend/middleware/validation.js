@@ -9,7 +9,7 @@ const registerFarmerSchema = Joi.object({
   district: Joi.string().min(2).max(100).required(),
   land_size: Joi.number().positive().precision(2).required(),
   nic_number: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
-  organization_committee_number: Joi.string().min(1).max(50).required(),
+  organization_id: Joi.number().integer().positive().allow(null, '').optional(),
   address: Joi.string().allow('').max(500),
   profile_image: Joi.any(),
   birth_date: Joi.string().allow(''),
@@ -69,12 +69,159 @@ const registerBuyerSchema = Joi.object({
   contact_number: Joi.string().pattern(/^[0-9+\-\s()]+$/).min(10).max(20).required(),
   district: Joi.string().min(2).max(100).required(),
   nic_number: Joi.string().pattern(/^[0-9]{9}[VXvx]$|^[0-9]{12}$/).required(),
-  company_name: Joi.string().min(2).max(255).required(),
-  company_type: Joi.string().min(2).max(100).required(),
+  company_name: Joi.string().min(2).max(255).allow('').optional(),
+  company_type: Joi.string().min(2).max(100).allow('').optional(),
   company_address: Joi.string().allow('').max(500),
   profile_image: Joi.any(),
   payment_offer: Joi.string().allow('').max(100)
 });
+
+// Crop Post validation schemas
+const createCropPostSchema = Joi.object({
+  cropName: Joi.string().min(2).max(100).required()
+    .messages({
+      'string.empty': 'Crop name is required',
+      'string.min': 'Crop name must be at least 2 characters',
+      'string.max': 'Crop name cannot exceed 100 characters'
+    }),
+  
+  cropCategory: Joi.string().valid('vegetables', 'grains').required()
+    .messages({
+      'any.only': 'Crop category must be either vegetables or grains',
+      'any.required': 'Crop category is required'
+    }),
+  
+  variety: Joi.string().max(100).allow('').optional(),
+  
+  quantity: Joi.number().positive().precision(2).required()
+    .messages({
+      'number.positive': 'Quantity must be greater than 0',
+      'any.required': 'Quantity is required'
+    }),
+  
+  unit: Joi.string().valid('kg', 'g', 'tons', 'bags', 'pieces', 'bunches').required()
+    .messages({
+      'any.only': 'Invalid unit type',
+      'any.required': 'Unit is required'
+    }),
+  
+  pricePerUnit: Joi.number().positive().precision(2).required()
+    .messages({
+      'number.positive': 'Price must be greater than 0',
+      'any.required': 'Price per unit is required'
+    }),
+  
+  harvestDate: Joi.date().iso().required()
+    .messages({
+      'date.format': 'Invalid harvest date format',
+      'any.required': 'Harvest date is required'
+    }),
+  
+  expiryDate: Joi.date().iso().greater(Joi.ref('harvestDate')).allow('').optional()
+    .messages({
+      'date.greater': 'Expiry date must be after harvest date'
+    }),
+  
+  location: Joi.string().min(10).max(500).required()
+    .messages({
+      'string.min': 'Please provide a detailed location (at least 10 characters)',
+      'string.max': 'Location description is too long',
+      'any.required': 'Location is required'
+    }),
+  
+  district: Joi.string().valid(
+    'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
+    'Galle', 'Matara', 'Hambantota', 'Jaffna', 'Kilinochchi', 'Mannar',
+    'Vavuniya', 'Mullaitivu', 'Batticaloa', 'Ampara', 'Trincomalee',
+    'Kurunegala', 'Puttalam', 'Anuradhapura', 'Polonnaruwa', 'Badulla',
+    'Moneragala', 'Ratnapura', 'Kegalle'
+  ).required()
+    .messages({
+      'any.only': 'Please select a valid Sri Lankan district',
+      'any.required': 'District is required'
+    }),
+  
+  description: Joi.string().max(1000).allow('').optional(),
+  
+  farmerName: Joi.string().min(2).max(100).required()
+    .messages({
+      'string.min': 'Farmer name must be at least 2 characters',
+      'any.required': 'Farmer name is required'
+    }),
+  
+  contactNumber: Joi.string().pattern(/^(\+94|0)[0-9]{9}$/).required()
+    .messages({
+      'string.pattern.base': 'Invalid Sri Lankan phone number format',
+      'any.required': 'Contact number is required'
+    }),
+  
+  email: Joi.string().email().allow('').optional()
+    .messages({
+      'string.email': 'Invalid email format'
+    }),
+  
+  organicCertified: Joi.boolean().default(false),
+  pesticideFree: Joi.boolean().default(false),
+  freshlyHarvested: Joi.boolean().default(false)
+});
+
+const updateCropPostSchema = Joi.object({
+  cropName: Joi.string().min(2).max(100).optional(),
+  cropCategory: Joi.string().valid('vegetables', 'grains').optional(),
+  variety: Joi.string().max(100).allow('').optional(),
+  quantity: Joi.number().positive().precision(2).optional(),
+  unit: Joi.string().valid('kg', 'g', 'tons', 'bags', 'pieces', 'bunches').optional(),
+  pricePerUnit: Joi.number().positive().precision(2).optional(),
+  harvestDate: Joi.date().iso().optional(),
+  expiryDate: Joi.date().iso().allow('').optional(),
+  location: Joi.string().min(10).max(500).optional(),
+  district: Joi.string().valid(
+    'Colombo', 'Gampaha', 'Kalutara', 'Kandy', 'Matale', 'Nuwara Eliya',
+    'Galle', 'Matara', 'Hambantota', 'Jaffna', 'Kilinochchi', 'Mannar',
+    'Vavuniya', 'Mullaitivu', 'Batticaloa', 'Ampara', 'Trincomalee',
+    'Kurunegala', 'Puttalam', 'Anuradhapura', 'Polonnaruwa', 'Badulla',
+    'Moneragala', 'Ratnapura', 'Kegalle'
+  ).optional(),
+  description: Joi.string().max(1000).allow('').optional(),
+  contactNumber: Joi.string().pattern(/^(\+94|0)[0-9]{9}$/).optional(),
+  email: Joi.string().email().allow('').optional(),
+  organicCertified: Joi.boolean().optional(),
+  pesticideFree: Joi.boolean().optional(),
+  freshlyHarvested: Joi.boolean().optional()
+});
+
+// Validation middleware functions for crop posts
+const validateCreateCropPost = (req, res, next) => {
+  const { error } = createCropPostSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    const errors = error.details.map(detail => ({
+      field: detail.path[0],
+      message: detail.message
+    }));
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors
+    });
+  }
+  next();
+};
+
+const validateUpdateCropPost = (req, res, next) => {
+  const { error } = updateCropPostSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    const errors = error.details.map(detail => ({
+      field: detail.path[0],
+      message: detail.message
+    }));
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors
+    });
+  }
+  next();
+};
 
 module.exports = {
   registerFarmerSchema,
@@ -82,7 +229,11 @@ module.exports = {
   registerBuyerSchema,
   loginSchema,
   organizationSchema,
-  validate
+  validate,
+  createCropPostSchema,
+  updateCropPostSchema,
+  validateCreateCropPost,
+  validateUpdateCropPost
   ,
   // Shop owner registration validation schema
   registerShopOwnerSchema: Joi.object({

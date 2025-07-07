@@ -1,34 +1,65 @@
 const Organization = require('../models/Organization');
 const { formatResponse } = require('../utils/helpers');
 
-// Create organization
-const createOrganization = async (req, res, next) => {
+// Register organization (new flow)
+const registerOrganization = async (req, res, next) => {
   try {
-    const { name, committee_number, district } = req.body;
+    const {
+      organizationName,
+      area,
+      govijanasewaniladariname,
+      govijanasewaniladariContact,
+      establishedDate,
+      organizationDescription,
+      contactperson_id
+    } = req.body;
 
-    // Check if organization already exists
-    const existingOrg = await Organization.findByCommitteeNumber(committee_number);
-    if (existingOrg) {
-      return res.status(400).json(
-        formatResponse(false, 'Organization with this committee number already exists')
-      );
+    // File upload (memoryStorage: only buffer and originalname are available)
+    let letterOfProofFile = null;
+    let letterOfProofName = null;
+    if (req.file) {
+      letterOfProofFile = req.file.buffer;
+      letterOfProofName = req.file.originalname;
+    }
+
+    // Validate required fields
+    if (
+      !organizationName ||
+      !area ||
+      !govijanasewaniladariname ||
+      !govijanasewaniladariContact ||
+      !letterOfProofFile ||
+      !establishedDate
+    ) {
+      return res.status(400).json({ success: false, message: 'Missing required fields.' });
     }
 
     // Create organization
     const result = await Organization.create({
-      name,
-      committee_number,
-      district
+      org_name: organizationName,
+      org_area: area,
+      gn_name: govijanasewaniladariname,
+      gn_contactno: govijanasewaniladariContact,
+      letter_of_proof: letterOfProofName, // store original filename for reference
+      letter_of_proof_file: letterOfProofFile,
+      est: establishedDate,
+      org_description: organizationDescription,
+      contactperson_id
     });
 
-    // Get created organization
-    const newOrganization = await Organization.findById(result.insertId);
+    res.status(201).json({ success: true, message: 'Organization registered successfully', id: result.insertId });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    res.status(201).json(
-      formatResponse(true, 'Organization created successfully', {
-        organization: newOrganization
-      })
-    );
+// Search organizations by name
+const searchOrganizations = async (req, res, next) => {
+  try {
+    const { name } = req.query;
+    if (!name || name.length < 2) return res.json([]);
+    const orgs = await Organization.searchByName(name);
+    res.json(orgs);
   } catch (error) {
     next(error);
   }
@@ -127,7 +158,8 @@ const deleteOrganization = async (req, res, next) => {
 };
 
 module.exports = {
-  createOrganization,
+  registerOrganization,
+  searchOrganizations,
   getAllOrganizations,
   getOrganizationByCommitteeNumber,
   updateOrganization,
