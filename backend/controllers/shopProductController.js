@@ -143,3 +143,18 @@ exports.getAllShopProducts = async (req, res) => {
     });
   }
 };
+
+const getShopProductById = (req, res) => {
+  const { id } = req.params;
+  const sql = 'SELECT * FROM shop_products WHERE id = ?';
+  db.query(sql, [id], (err, results) => {
+    if (err) {
+      console.error('Error fetching product by ID:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json(results[0]);
+  });
+};
