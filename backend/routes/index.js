@@ -9,7 +9,7 @@ const shopProductRoutes = require('./shopProductRoutes');
 const cropPostRoutes = require('./cropPosts');
 const userRoutes = require('./users');
 const shopComplaintRoutes = require('./shopComplaint');
-
+const transporterRoutes = require('./transporterRoutes');
 
 const router = express.Router();
 
@@ -34,6 +34,7 @@ router.use('/shop-products', shopProductRoutes);
 router.use('/crop-posts', cropPostRoutes);
 router.use('/users', userRoutes);
 router.use('/shop-complaints', shopComplaintRoutes);
+router.use('/transporters', transporterRoutes);
 
 
 module.exports = router;
