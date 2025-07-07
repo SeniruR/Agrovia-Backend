@@ -2,6 +2,14 @@ const ShopProductModel = require('../models/shopProductModel');
 
 exports.createShopProduct = async (req, res) => {
   try {
+    // Handle file uploads first
+    const uploadedImages = req.files ? req.files.map(file => ({
+      buffer: file.buffer.toString('base64'), // Convert buffer to base64
+      mimetype: file.mimetype,
+      originalname: file.originalname
+    })) : [];
+
+    // Get other fields from req.body
     const {
       shop_name,
       owner_name,
@@ -9,7 +17,7 @@ exports.createShopProduct = async (req, res) => {
       phone_no,
       shop_address,
       city,
-      productType,
+      product_type,
       product_name,
       brand,
       category,
@@ -18,15 +26,15 @@ exports.createShopProduct = async (req, res) => {
       unit,
       available_quantity,
       product_description,
-      features,
+   
       usage_history,
-      organicCertified,
-      termsAccepted,
-      images
+      organic_certified,
+      terms_accepted
     } = req.body;
 
-    console.log("Incoming data:", req.body);
+    console.log("Incoming data:", { ...req.body, images: uploadedImages });
 
+    // Required fields validation
     const requiredFields = [
       'shop_name',
       'owner_name',
@@ -34,7 +42,7 @@ exports.createShopProduct = async (req, res) => {
       'phone_no',
       'shop_address',
       'city',
-      'productType',
+      'product_type',
       'product_name',
       'price',
       'product_description'
@@ -49,36 +57,50 @@ exports.createShopProduct = async (req, res) => {
       });
     }
 
+    // Field format validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
+    }
+
+    if (!/^(\+94|0)?[0-9]{9,10}$/.test(phone_no.replace(/\s/g, ''))) {
+      return res.status(400).json({ error: 'Invalid Sri Lankan phone number' });
     }
 
     if (isNaN(price) || parseFloat(price) <= 0) {
       return res.status(400).json({ error: 'Price must be a positive number' });
     }
 
-    // Prepare data with safe defaults (avoid undefined)
+    // Product type validation
+    const validProductTypes = ['seeds', 'fertilizer', 'chemical'];
+    if (!validProductTypes.includes(product_type)) {
+      return res.status(400).json({
+        error: 'Invalid product type',
+        validTypes: validProductTypes
+      });
+    }
+
+    // Prepare data with safe defaults
     const productData = {
-      shop_name: shop_name ?? null,
-      owner_name: owner_name ?? null,
-      email: email ?? null,
-      phone_no: phone_no ?? null,
-      shop_address: shop_address ?? null,
-      city: city ?? null,
-      product_type: productType ?? null,
-      product_name: product_name ?? null,
-      brand: brand ?? null,
-      category: category ?? null,
-      season: season ?? null,
-      price: price !== undefined ? price : null,
-      unit: unit ?? null,
-      available_quantity: available_quantity !== undefined ? available_quantity : 0,
-      product_description: product_description ?? null,
-      features: features ?? null,
-      usage_history: usage_history ?? null,
-      organic_certified: organicCertified !== undefined ? organicCertified : false,
-      terms_accepted: termsAccepted !== undefined ? termsAccepted : false,
-      images: images ? JSON.stringify(images) : '[]'
+      shop_name: shop_name || null,
+      owner_name: owner_name || null,
+      email: email || null,
+      phone_no: phone_no || null,
+      shop_address: shop_address || null,
+      city: city || null,
+      product_type: product_type || null,
+      product_name: product_name || null,
+      brand: brand || null,
+      category: category || null,
+      season: season || null,
+      price: price || 0,
+      unit: unit || null,
+      available_quantity: available_quantity || 0,
+      product_description: product_description || null,
+      
+      usage_history: usage_history || null,
+      organic_certified: organic_certified === 'true' || organic_certified === true,
+      terms_accepted: terms_accepted === 'true' || terms_accepted === true,
+      images: uploadedImages.length > 0 ? JSON.stringify(uploadedImages) : '[]'
     };
 
     const result = await ShopProductModel.create(productData);
@@ -88,10 +110,7 @@ exports.createShopProduct = async (req, res) => {
       shopitemid: result.insertId,
       data: {
         ...productData,
-        productType,
-        organicCertified,
-        termsAccepted,
-        images: images || []
+        images: uploadedImages
       }
     });
 
@@ -110,9 +129,8 @@ exports.getAllShopProducts = async (req, res) => {
 
     const formattedProducts = products.map(product => ({
       ...product,
-      productType: product.product_type,
-      organicCertified: product.organic_certified,
-      termsAccepted: product.terms_accepted,
+      organic_certified: Boolean(product.organic_certified),
+      terms_accepted: Boolean(product.terms_accepted),
       images: product.images ? JSON.parse(product.images) : []
     }));
 
