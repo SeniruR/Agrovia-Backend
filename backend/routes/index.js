@@ -3,9 +3,13 @@ const express = require('express');
 const authRoutes = require('./auth');
 const organizationRoutes = require('./organizations');
 const farmerRoutes = require('./farmers');
+
+const shopProductRoutes = require('./shopProductRoutes');
+
 const cropPostRoutes = require('./cropPosts');
 const userRoutes = require('./users');
 const shopComplaintRoutes = require('./shopComplaint');
+
 
 const router = express.Router();
 
@@ -24,8 +28,12 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
 router.use('/farmers', farmerRoutes);
+
+router.use('/shop-products', shopProductRoutes);
+
 router.use('/crop-posts', cropPostRoutes);
 router.use('/users', userRoutes);
 router.use('/shop-complaints', shopComplaintRoutes);
+
 
 module.exports = router;

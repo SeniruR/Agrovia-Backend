@@ -1,0 +1,12 @@
+const express = require('express');
+const router = express.Router();
+
+console.log('ShopProducts route loaded');
+
+const shopProductController = require('../controllers/shopProductController');
+const validateShopProduct = require('../middleware/validateShopProduct');
+
+router.post('/', validateShopProduct, shopProductController.createShopProduct);
+router.get('/', shopProductController.getAllShopProducts);
+
+module.exports = router;
