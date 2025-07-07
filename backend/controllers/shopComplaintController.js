@@ -1,4 +1,5 @@
 const ShopComplaint = require('../models/ShopComplaint');
+const path = require('path');
 
 // Create a new shop complaint
 exports.createComplaint = async (req, res, next) => {
@@ -12,10 +13,14 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate,
-      
-      attachments
+      purchaseDate
     } = req.body;
+
+    // Handle file uploads
+    let attachments = null;
+    if (req.files && req.files.length > 0) {
+      attachments = req.files.map(file => file.filename);
+    }
 
     // Save complaint
     const result = await ShopComplaint.create({
@@ -28,7 +33,6 @@ exports.createComplaint = async (req, res, next) => {
       category,
       orderNumber,
       purchaseDate,
- 
       attachments
     });
     res.status(201).json({ success: true, message: 'Complaint submitted', id: result.insertId });

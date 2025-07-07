@@ -25,16 +25,15 @@ class ShopComplaint {
     `;
     try {
       const [result] = await pool.execute(query, [
-        title,
-        description,
-        submittedBy,
-        priority,
-        shopName,
-        location,
-        category,
-        orderNumber,
-        purchaseDate,
-       
+        title ?? null,
+        description ?? null,
+        submittedBy ?? null,
+        priority ?? null,
+        shopName ?? null,
+        location ?? null,
+        category ?? null,
+        orderNumber ?? null,
+        purchaseDate ? purchaseDate : null,
         attachments ? JSON.stringify(attachments) : null
       ]);
       return result;
