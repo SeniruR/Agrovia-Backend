@@ -24,6 +24,7 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 
+
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
   credentials: true
