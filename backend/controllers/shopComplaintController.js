@@ -1,6 +1,4 @@
-
 const ShopComplaint = require('../models/ShopComplaint');
-const ShopComplaintAttachment = require('../models/ShopComplaintAttachment');
 const path = require('path');
 
 // Create a new shop complaint (with multiple BLOB attachments)
@@ -15,18 +13,20 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate,
-      attachments
-      
+      purchaseDate
     } = req.body;
 
     // Handle file uploads
-   
+    let attachmentFilenames = null;
     if (req.files && req.files.length > 0) {
-      attachments = req.files.map(file => file.filename);
+      attachmentFilenames = req.files.map(file => file.filename);
+    }
+    // Convert attachments array to Buffer (BLOB) if present
+    let attachmentsBlob = null;
+    if (attachmentFilenames) {
+      attachmentsBlob = Buffer.from(JSON.stringify(attachmentFilenames));
     }
 
-    // Save complaint
     const result = await ShopComplaint.create({
       title,
       description,
@@ -35,23 +35,11 @@ exports.createComplaint = async (req, res, next) => {
       shopName,
       location,
       category,
-      orderNumber,
-      purchaseDate,
-      attachments 
+      orderNumber: orderNumber === '' ? null : orderNumber,
+      purchaseDate: purchaseDate === '' ? null : purchaseDate,
+      attachments: attachmentsBlob
     });
     const complaintId = result.insertId;
-
-    // Save each attachment as a BLOB in shop_complaint_attachments
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        await ShopComplaintAttachment.create({
-          complaint_id: complaintId,
-          filename: file.originalname,
-          mimetype: file.mimetype,
-          filedata: file.buffer
-        });
-      }
-    }
 
     res.status(201).json({ success: true, message: 'Complaint submitted', id: complaintId });
   } catch (error) {
@@ -83,17 +71,7 @@ exports.getComplaintById = async (req, res, next) => {
 };
 
 // Download a single attachment by attachment ID
-exports.downloadAttachment = async (req, res, next) => {
-  try {
-    const attachment = await ShopComplaintAttachment.findById(req.params.attachmentId);
-    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
-    res.setHeader('Content-Type', attachment.mimetype);
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
-    res.send(attachment.filedata);
-  } catch (error) {
-    next(error);
-  }
-};
+
 
 // Update a complaint
 exports.updateComplaint = async (req, res, next) => {
