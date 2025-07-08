@@ -5,11 +5,24 @@ class CropPostController {
   static async createCropPost(req, res) {
     try {
       console.log('📝 Create crop post request received');
-      console.log('Request body:', req.body);
-      console.log('Request files:', req.files);
       
-      // For testing, let's use a mock user ID
-      const userId = req.user?.id || 1; // Default to 1 for testing
+      // Get the farmer ID from the authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+
+      if (req.user.role !== 'farmer') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only farmers can create crop posts.'
+        });
+      }
+
+      const farmerId = req.user.id;
+      console.log('✅ Creating crop post for farmer ID:', farmerId);
       
       const {
         crop_category = 'vegetables',
@@ -51,7 +64,7 @@ class CropPostController {
       `;
 
       const values = [
-        userId, 
+        farmerId, // Use the authenticated farmer's ID
         crop_category, 
         crop_name, 
         variety, 
@@ -74,12 +87,14 @@ class CropPostController {
       console.log('Executing query with values:', values);
       const [result] = await pool.execute(query, values);
       console.log('✅ Crop post created with ID:', result.insertId);
+      console.log('✅ Created for farmer ID:', farmerId);
 
       res.status(201).json({
         success: true,
         message: 'Crop post created successfully',
         data: {
           id: result.insertId,
+          farmer_id: farmerId, // Include the farmer ID in response
           ...req.body,
           images
         }
@@ -196,7 +211,16 @@ class CropPostController {
   // Get user's crop posts
   static async getUserCropPosts(req, res) {
     try {
-      const userId = req.user?.id || 1; // Default for testing
+      // Get the farmer ID from the authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+
+      const farmerId = req.user.id;
+      console.log('� Getting crop posts for farmer ID:', farmerId);
       
       const query = `
         SELECT * FROM crop_posts 
@@ -204,7 +228,7 @@ class CropPostController {
         ORDER BY created_at DESC
       `;
 
-      const [rows] = await pool.execute(query, [userId]);
+      const [rows] = await pool.execute(query, [farmerId]);
       const cropPosts = rows.map(post => {
         let images = [];
         try {

@@ -47,7 +47,19 @@ const authenticate = async (req, res, next) => {
         });
       }
 
-      // Add user to request object
+      // Add user to request object with role mapping
+      const userTypeMap = {
+        '1': 'farmer',
+        '2': 'buyer', 
+        '3': 'shop_owner',
+        '4': 'transporter',
+        '5': 'admin',
+        '6': 'committee_member'
+      };
+      
+      // Map user_type to role for authorization
+      user.role = userTypeMap[user.user_type?.toString()] || 'unknown';
+      
       req.user = user;
       next();
     } catch (tokenError) {
@@ -66,7 +78,7 @@ const authenticate = async (req, res, next) => {
 };
 
 // Role-based authorization middleware
-const authorize = (...allowedRoles) => {
+const authorize = (allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -75,7 +87,10 @@ const authorize = (...allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Ensure allowedRoles is an array
+    const rolesArray = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+    
+    if (!rolesArray.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Insufficient permissions'
