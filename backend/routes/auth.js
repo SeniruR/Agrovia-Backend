@@ -10,7 +10,8 @@ const {
   login,
   getProfile,
   getAllUsers,
-  registerShopOwner
+  registerShopOwner,
+  getProfileWithFarmerDetails
 } = require('../controllers/authController');
 const { registerTransporter } = require('../controllers/transporterController');
 
@@ -80,6 +81,12 @@ router.post('/register/transporter',
 router.get('/profile',
   authenticate,
   getProfile
+);
+
+// New: Full profile with farmer details
+router.get('/profile-full',
+  authenticate,
+  getProfileWithFarmerDetails
 );
 
 // Admin only routes
