@@ -129,6 +129,7 @@ const createTables = async (connection) => {
         contact_number VARCHAR(20) NOT NULL,
         email VARCHAR(255),
         images JSON,
+        minimum_quantity_bulk VARCHAR(100) NULL,
         status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

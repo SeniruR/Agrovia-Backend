@@ -32,6 +32,7 @@ class CropPostController {
         quantity = 0,
         unit = 'kg',
         price_per_unit = 0,
+        minimum_quantity_bulk = null,
         harvest_date = null,
         expiry_date = null,
         location = '',
@@ -55,13 +56,24 @@ class CropPostController {
         }));
       }
 
+      // Ensure minimum_quantity_bulk is stored as null if blank/invalid
+      let minBulk = minimum_quantity_bulk;
+      if (minBulk === '' || minBulk === undefined || minBulk === null) {
+        minBulk = null;
+      } else if (!isNaN(minBulk)) {
+        minBulk = Number(minBulk);
+        if (isNaN(minBulk)) minBulk = null;
+      } else {
+        minBulk = null;
+      }
+
       const query = `
         INSERT INTO crop_posts (
           farmer_id, crop_category, crop_name, variety, quantity, unit, 
-          price_per_unit, harvest_date, expiry_date, location, district, 
+          price_per_unit, minimum_quantity_bulk, harvest_date, expiry_date, location, district, 
           description, contact_number, email, organic_certified, 
           pesticide_free, freshly_harvested, images
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const values = [
@@ -72,6 +84,7 @@ class CropPostController {
         quantity, 
         unit,
         price_per_unit, 
+        minBulk,
         harvest_date, 
         expiry_date, 
         location, 

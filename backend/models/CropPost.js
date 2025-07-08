@@ -42,7 +42,11 @@ class CropPost {
       parseFloat(quantity),
       unit,
       parseFloat(price_per_unit),
-      minimum_quantity_bulk ? parseFloat(minimum_quantity_bulk) : null,
+      minimum_quantity_bulk === '' || minimum_quantity_bulk === undefined || minimum_quantity_bulk === null
+        ? null
+        : !isNaN(minimum_quantity_bulk)
+          ? parseFloat(minimum_quantity_bulk)
+          : null,
       harvest_date,
       expiry_date || null,
       location,
@@ -305,7 +309,11 @@ class CropPost {
       parseFloat(quantity),
       unit,
       parseFloat(price_per_unit),
-      minimum_quantity_bulk ? parseFloat(minimum_quantity_bulk) : null,
+      minimum_quantity_bulk === '' || minimum_quantity_bulk === undefined || minimum_quantity_bulk === null
+        ? null
+        : !isNaN(minimum_quantity_bulk)
+          ? parseFloat(minimum_quantity_bulk)
+          : null,
       harvest_date,
       expiry_date || null,
       location,
