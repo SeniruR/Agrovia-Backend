@@ -12,13 +12,14 @@ class ShopComplaint {
       location,
       category,
       orderNumber,
-      purchaseDate
+      purchaseDate,
+      attachments
     } = complaint;
 
     const query = `
       INSERT INTO shop_complaints
-        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date,attachments)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)
     `;
     try {
       const [result] = await pool.execute(query, [
