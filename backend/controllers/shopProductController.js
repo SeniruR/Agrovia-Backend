@@ -79,7 +79,18 @@ exports.createShopProduct = async (req, res) => {
       });
     }
 
-    // Prepare data with safe defaults
+    // Prepare data with safe defaults and handle optional/nullable fields
+    // Ensure minimum_quantity_bulk is stored as null if blank/empty/invalid
+    let minimum_quantity_bulk = req.body.minimum_quantity_bulk;
+    if (minimum_quantity_bulk === '' || minimum_quantity_bulk === undefined || minimum_quantity_bulk === null) {
+      minimum_quantity_bulk = null;
+    } else if (!isNaN(minimum_quantity_bulk)) {
+      minimum_quantity_bulk = Number(minimum_quantity_bulk);
+      if (isNaN(minimum_quantity_bulk)) minimum_quantity_bulk = null;
+    } else {
+      minimum_quantity_bulk = null;
+    }
+
     const productData = {
       shop_name: shop_name || null,
       owner_name: owner_name || null,
@@ -96,7 +107,7 @@ exports.createShopProduct = async (req, res) => {
       unit: unit || null,
       available_quantity: available_quantity || 0,
       product_description: product_description || null,
-      
+      minimum_quantity_bulk, // ensure correct DB storage
       usage_history: usage_history || null,
       organic_certified: organic_certified === 'true' || organic_certified === true,
       terms_accepted: terms_accepted === 'true' || terms_accepted === true,

@@ -6,67 +6,53 @@ const cropImageUpload = require('../config/cropImageUpload');
 
 const router = express.Router();
 
-// Optional authentication middleware for testing
-const optionalAuthenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authenticate(req, res, next);
-  } else {
-    // For testing without authentication
-    req.user = { id: 1, role: 'farmer' };
-    next();
-  }
-};
-
 // Public routes (no authentication required)
 router.get('/', CropPostController.getAllCropPosts);
 router.get('/stats', CropPostController.getCropPostStats);
+
+// Enhanced public routes for retrieving crop posts with bulk quantity details
+// These must come BEFORE the /:id route to avoid conflicts
+router.get('/enhanced', CropPostController.getAllCropPostsEnhanced);
+router.get('/districts', CropPostController.getAvailableDistricts);
+router.get('/bulk-orders', CropPostController.getBulkOrderCrops);
+router.get('/enhanced/:id', CropPostController.getCropPostByIdEnhanced);
+
+// Parameterized routes (must come after specific routes)
 router.get('/:id', CropPostController.getCropPostById);
 
-// Farmer routes (temporarily without authentication for testing)
+// Protected farmer routes (require authentication)
 router.post('/', 
-  (req, res, next) => {
-    // Mock user for testing
-    req.user = { id: 1, role: 'farmer' };
-    next();
-  },
+  authenticate, // Use real authentication middleware
+  authorize(['farmer']), // Only farmers can create crop posts
   cropImageUpload.array('images', 5),
   validateCropPost,
   CropPostController.createCropPost
 );
 
 router.get('/user/my-posts', 
-  (req, res, next) => {
-    req.user = { id: 1, role: 'farmer' };
-    next();
-  },
+  authenticate,
+  authorize(['farmer']),
   CropPostController.getUserCropPosts
 );
 
 router.put('/:id',
-  (req, res, next) => {
-    req.user = { id: 1, role: 'farmer' };
-    next();
-  },
+  authenticate,
+  authorize(['farmer']),
   cropImageUpload.array('images', 5),
   validateCropPostUpdate,
   CropPostController.updateCropPost
 );
 
 router.delete('/:id',
-  (req, res, next) => {
-    req.user = { id: 1, role: 'farmer' };
-    next();
-  },
+  authenticate,
+  authorize(['farmer']),
   CropPostController.deleteCropPost
 );
 
 // Admin routes
 router.patch('/:id/status',
-  (req, res, next) => {
-    req.user = { id: 1, role: 'admin' };
-    next();
-  },
+  authenticate,
+  authorize(['admin']),
   CropPostController.updateCropPostStatus
 );
 

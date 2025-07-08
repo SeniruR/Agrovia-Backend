@@ -1,15 +1,29 @@
 const { pool } = require('../config/database');
+const CropPost = require('../models/CropPost');
 
 class CropPostController {
   // Create new crop post
   static async createCropPost(req, res) {
     try {
       console.log('📝 Create crop post request received');
-      console.log('Request body:', req.body);
-      console.log('Request files:', req.files);
       
-      // For testing, let's use a mock user ID
-      const userId = req.user?.id || 1; // Default to 1 for testing
+      // Get the farmer ID from the authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+
+      if (req.user.role !== 'farmer') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only farmers can create crop posts.'
+        });
+      }
+
+      const farmerId = req.user.id;
+      console.log('✅ Creating crop post for farmer ID:', farmerId);
       
       const {
         crop_category = 'vegetables',
@@ -18,6 +32,7 @@ class CropPostController {
         quantity = 0,
         unit = 'kg',
         price_per_unit = 0,
+        minimum_quantity_bulk = null,
         harvest_date = null,
         expiry_date = null,
         location = '',
@@ -41,23 +56,35 @@ class CropPostController {
         }));
       }
 
+      // Ensure minimum_quantity_bulk is stored as null if blank/invalid
+      let minBulk = minimum_quantity_bulk;
+      if (minBulk === '' || minBulk === undefined || minBulk === null) {
+        minBulk = null;
+      } else if (!isNaN(minBulk)) {
+        minBulk = Number(minBulk);
+        if (isNaN(minBulk)) minBulk = null;
+      } else {
+        minBulk = null;
+      }
+
       const query = `
         INSERT INTO crop_posts (
           farmer_id, crop_category, crop_name, variety, quantity, unit, 
-          price_per_unit, harvest_date, expiry_date, location, district, 
+          price_per_unit, minimum_quantity_bulk, harvest_date, expiry_date, location, district, 
           description, contact_number, email, organic_certified, 
           pesticide_free, freshly_harvested, images
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const values = [
-        userId, 
+        farmerId, // Use the authenticated farmer's ID
         crop_category, 
         crop_name, 
         variety, 
         quantity, 
         unit,
         price_per_unit, 
+        minBulk,
         harvest_date, 
         expiry_date, 
         location, 
@@ -74,12 +101,14 @@ class CropPostController {
       console.log('Executing query with values:', values);
       const [result] = await pool.execute(query, values);
       console.log('✅ Crop post created with ID:', result.insertId);
+      console.log('✅ Created for farmer ID:', farmerId);
 
       res.status(201).json({
         success: true,
         message: 'Crop post created successfully',
         data: {
           id: result.insertId,
+          farmer_id: farmerId, // Include the farmer ID in response
           ...req.body,
           images
         }
@@ -149,6 +178,109 @@ class CropPostController {
     }
   }
 
+  // Get all crop posts with enhanced details including bulk quantities
+  static async getAllCropPostsEnhanced(req, res) {
+    try {
+      console.log('📋 Get enhanced crop posts request received');
+      
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const filters = {
+        crop_category: req.query.category,
+        district: req.query.district,
+        crop_name: req.query.search,
+        min_price: req.query.min_price,
+        max_price: req.query.max_price,
+        has_bulk_pricing: req.query.bulk_only === 'true'
+      };
+
+      // Remove undefined filters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined || filters[key] === '') {
+          delete filters[key];
+        }
+      });
+
+      const result = await CropPost.getAllWithBulkDetails(page, limit, filters);
+
+      res.json({
+        success: true,
+        message: 'Enhanced crop posts retrieved successfully',
+        data: result.posts,
+        pagination: result.pagination,
+        filters_applied: filters
+      });
+    } catch (error) {
+      console.error('❌ Get enhanced crop posts error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve enhanced crop posts',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get available districts from crop posts
+  static async getAvailableDistricts(req, res) {
+    try {
+      console.log('🗺️ Get available districts request received');
+      
+      const result = await CropPost.getAvailableDistricts();
+
+      res.json({
+        success: true,
+        message: 'Available districts retrieved successfully',
+        data: result
+      });
+    } catch (error) {
+      console.error('❌ Get available districts error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve available districts',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get crop posts suitable for bulk orders
+  static async getBulkOrderCrops(req, res) {
+    try {
+      console.log('📦 Get bulk order crops request received');
+      
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const filters = {
+        district: req.query.district,
+        crop_category: req.query.category,
+        max_bulk_cost: req.query.max_bulk_cost
+      };
+
+      // Remove undefined filters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined || filters[key] === '') {
+          delete filters[key];
+        }
+      });
+
+      const result = await CropPost.getBulkOrderCrops(page, limit, filters);
+
+      res.json({
+        success: true,
+        message: 'Bulk order crops retrieved successfully',
+        data: result.bulk_crops,
+        summary: result.summary,
+        filters_applied: filters
+      });
+    } catch (error) {
+      console.error('❌ Get bulk order crops error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve bulk order crops',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
   // Get crop post by ID
   static async getCropPostById(req, res) {
     try {
@@ -193,10 +325,49 @@ class CropPostController {
     }
   }
 
+  // Get crop post by ID with enhanced details
+  static async getCropPostByIdEnhanced(req, res) {
+    try {
+      const { id } = req.params;
+      console.log('📋 Get enhanced crop post by ID request received for ID:', id);
+      
+      const post = await CropPost.getById(id);
+      
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: 'Crop post not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Enhanced crop post retrieved successfully',
+        data: post
+      });
+    } catch (error) {
+      console.error('❌ Get enhanced crop post by ID error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve enhanced crop post',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
   // Get user's crop posts
   static async getUserCropPosts(req, res) {
     try {
-      const userId = req.user?.id || 1; // Default for testing
+      // Get the farmer ID from the authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+
+      const farmerId = req.user.id;
+      console.log('� Getting crop posts for farmer ID:', farmerId);
       
       const query = `
         SELECT * FROM crop_posts 
@@ -204,7 +375,7 @@ class CropPostController {
         ORDER BY created_at DESC
       `;
 
-      const [rows] = await pool.execute(query, [userId]);
+      const [rows] = await pool.execute(query, [farmerId]);
       const cropPosts = rows.map(post => {
         let images = [];
         try {

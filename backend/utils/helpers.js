@@ -25,6 +25,21 @@ const generateRandomString = (length = 32) => {
 const sanitizeUser = (user) => {
   // Remove both password and password_hash fields
   const { password, password_hash, ...sanitizedUser } = user;
+  
+  // Map user_type to role for frontend compatibility
+  if (sanitizedUser.user_type) {
+    const userTypeMap = {
+      '1': 'farmer',
+      '2': 'buyer', 
+      '3': 'shop_owner',
+      '4': 'transporter',
+      '5': 'admin',
+      '6': 'committee_member'
+    };
+    
+    sanitizedUser.role = userTypeMap[sanitizedUser.user_type.toString()] || 'unknown';
+  }
+  
   return sanitizedUser;
 };
 
