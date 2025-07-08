@@ -17,9 +17,11 @@ const registerOrganization = async (req, res, next) => {
     // File upload (memoryStorage: only buffer and originalname are available)
     let letterOfProofFile = null;
     let letterOfProofName = null;
+    let letterOfProofMime = null;
     if (req.file) {
       letterOfProofFile = req.file.buffer;
       letterOfProofName = req.file.originalname;
+      letterOfProofMime = req.file.mimetype;
     }
 
     // Validate required fields
@@ -42,9 +44,10 @@ const registerOrganization = async (req, res, next) => {
       gn_contactno: govijanasewaniladariContact,
       letter_of_proof: letterOfProofName, // store original filename for reference
       letter_of_proof_file: letterOfProofFile,
+      letter_of_proof_mime: letterOfProofMime,
       est: establishedDate,
       org_description: organizationDescription,
-      contactperson_id
+      org_contactperson_id: contactperson_id
     });
 
     res.status(201).json({ success: true, message: 'Organization registered successfully', id: result.insertId });
