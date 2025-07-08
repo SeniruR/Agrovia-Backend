@@ -11,6 +11,7 @@ class CropPost {
       quantity,
       unit,
       price_per_unit,
+      minimum_quantity_bulk,
       harvest_date,
       expiry_date,
       location,
@@ -27,10 +28,10 @@ class CropPost {
     const query = `
       INSERT INTO crop_posts (
         farmer_id, crop_name, crop_category, variety, quantity, unit,
-        price_per_unit, harvest_date, expiry_date, location, district,
+        price_per_unit, minimum_quantity_bulk, harvest_date, expiry_date, location, district,
         description, organic_certified, pesticide_free, freshly_harvested,
         contact_number, email, images, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW())
     `;
 
     const values = [
@@ -41,6 +42,7 @@ class CropPost {
       parseFloat(quantity),
       unit,
       parseFloat(price_per_unit),
+      minimum_quantity_bulk ? parseFloat(minimum_quantity_bulk) : null,
       harvest_date,
       expiry_date || null,
       location,
