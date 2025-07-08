@@ -30,7 +30,8 @@ class ShopComplaint {
         location ?? null,
         category ?? null,
         orderNumber ?? null,
-        purchaseDate ? purchaseDate : null
+        purchaseDate ? purchaseDate : null,
+        attachments ?? null
       ]);
       return result;
     } catch (error) {

@@ -15,10 +15,18 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate
+      purchaseDate,
+      attachments
+      
     } = req.body;
 
-    // Save complaint first (no attachments)
+    // Handle file uploads
+   
+    if (req.files && req.files.length > 0) {
+      attachments = req.files.map(file => file.filename);
+    }
+
+    // Save complaint
     const result = await ShopComplaint.create({
       title,
       description,
@@ -28,7 +36,8 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate
+      purchaseDate,
+      attachments 
     });
     const complaintId = result.insertId;
 
