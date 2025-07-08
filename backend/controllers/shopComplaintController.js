@@ -15,13 +15,11 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate,
-      attachments
-      
+      purchaseDate
     } = req.body;
 
+    let attachments = req.body.attachments;
     // Handle file uploads
-   
     if (req.files && req.files.length > 0) {
       attachments = req.files.map(file => file.filename);
     }
@@ -42,7 +40,6 @@ exports.createComplaint = async (req, res, next) => {
     const complaintId = result.insertId;
 
     // Save each attachment as a BLOB in shop_complaint_attachments
-   
 
     res.status(201).json({ success: true, message: 'Complaint submitted', id: complaintId });
   } catch (error) {
