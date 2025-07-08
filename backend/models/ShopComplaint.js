@@ -34,7 +34,7 @@ class ShopComplaint {
         category ?? null,
         orderNumber ?? null,
         purchaseDate ? purchaseDate : null,
-        attachments ? JSON.stringify(attachments) : null
+        attachments ?? null
       ]);
       return result;
     } catch (error) {

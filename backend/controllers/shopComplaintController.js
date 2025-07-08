@@ -13,11 +13,13 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate
+      purchaseDate,
+      attachments
+      
     } = req.body;
 
     // Handle file uploads
-    let attachments = null;
+   
     if (req.files && req.files.length > 0) {
       attachments = req.files.map(file => file.filename);
     }
@@ -33,7 +35,9 @@ exports.createComplaint = async (req, res, next) => {
       category,
       orderNumber,
       purchaseDate,
+      
       attachments
+     
     });
     res.status(201).json({ success: true, message: 'Complaint submitted', id: result.insertId });
   } catch (error) {
