@@ -1,4 +1,6 @@
+
 const ShopComplaint = require('../models/ShopComplaint');
+const ShopComplaintAttachment = require('../models/ShopComplaintAttachment');
 const path = require('path');
 
 // Create a new shop complaint (with multiple BLOB attachments)
@@ -13,20 +15,18 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      purchaseDate
+      purchaseDate,
+      attachments
+      
     } = req.body;
 
     // Handle file uploads
-    let attachmentFilenames = null;
+   
     if (req.files && req.files.length > 0) {
-      attachmentFilenames = req.files.map(file => file.filename);
-    }
-    // Convert attachments array to Buffer (BLOB) if present
-    let attachmentsBlob = null;
-    if (attachmentFilenames) {
-      attachmentsBlob = Buffer.from(JSON.stringify(attachmentFilenames));
+      attachments = req.files.map(file => file.filename);
     }
 
+    // Save complaint
     const result = await ShopComplaint.create({
       title,
       description,
@@ -35,11 +35,14 @@ exports.createComplaint = async (req, res, next) => {
       shopName,
       location,
       category,
-      orderNumber: orderNumber === '' ? null : orderNumber,
-      purchaseDate: purchaseDate === '' ? null : purchaseDate,
-      attachments: attachmentsBlob
+      orderNumber,
+      purchaseDate,
+      attachments 
     });
     const complaintId = result.insertId;
+
+    // Save each attachment as a BLOB in shop_complaint_attachments
+   
 
     res.status(201).json({ success: true, message: 'Complaint submitted', id: complaintId });
   } catch (error) {
