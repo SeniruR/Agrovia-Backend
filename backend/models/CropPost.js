@@ -85,22 +85,18 @@ class CropPost {
       query += ' AND cp.crop_category = ?';
       values.push(filters.crop_category);
     }
-    
     if (filters.district) {
       query += ' AND cp.district = ?';
       values.push(filters.district);
     }
-    
     if (filters.crop_name) {
       query += ' AND cp.crop_name LIKE ?';
       values.push(`%${filters.crop_name}%`);
     }
-    
     if (filters.min_price) {
       query += ' AND cp.price_per_unit >= ?';
       values.push(parseFloat(filters.min_price));
     }
-    
     if (filters.max_price) {
       query += ' AND cp.price_per_unit <= ?';
       values.push(parseFloat(filters.max_price));
@@ -110,28 +106,20 @@ class CropPost {
 
     try {
       const [posts] = await pool.execute(query, values);
-      
-      // Parse images JSON for each post
-      const parsedPosts = posts.map(post => {
-        // Safely parse images JSON
-        let parsedImages = [];
-        try {
-          if (post.images && post.images.trim() !== '') {
-            parsedImages = JSON.parse(post.images);
-          }
-        } catch (jsonError) {
-          console.warn('Failed to parse images JSON for crop post', post.id, ':', jsonError.message);
-          parsedImages = [];
-        }
-        
+      const CropPostImage = require('./CropPostImage');
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      // For each post, fetch image URLs from CropPostImage
+      const parsedPosts = await Promise.all(posts.map(async post => {
+        const images = await CropPostImage.getByPostId(post.id);
+        const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${post.id}/images/${img.id}`);
         return {
           ...post,
-          images: parsedImages,
+          images: imageUrls,
           organic_certified: Boolean(post.organic_certified),
           pesticide_free: Boolean(post.pesticide_free),
           freshly_harvested: Boolean(post.freshly_harvested)
         };
-      });
+      }));
 
       // Get total count for pagination
       const countQuery = `
@@ -144,7 +132,6 @@ class CropPost {
         ${filters.min_price ? 'AND cp.price_per_unit >= ?' : ''}
         ${filters.max_price ? 'AND cp.price_per_unit <= ?' : ''}
       `;
-      
       const countValues = [];
       if (filters.crop_category) countValues.push(filters.crop_category);
       if (filters.district) countValues.push(filters.district);
@@ -196,20 +183,15 @@ class CropPost {
 
       const post = posts[0];
       
-      // Safely parse images JSON
-      let parsedImages = [];
-      try {
-        if (post.images && typeof post.images === 'string' && post.images.trim() !== '') {
-          parsedImages = JSON.parse(post.images);
-        }
-      } catch (jsonError) {
-        console.warn('Failed to parse images JSON for crop post', id, ':', jsonError.message);
-        parsedImages = [];
-      }
-      
+      // Fetch image BLOBs and return as URLs
+      const CropPostImage = require('./CropPostImage');
+      const images = await CropPostImage.getByPostId(post.id);
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${post.id}/images/${img.id}`);
+
       return {
         ...post,
-        images: parsedImages,
+        images: imageUrls,
         organic_certified: Boolean(post.organic_certified),
         pesticide_free: Boolean(post.pesticide_free),
         freshly_harvested: Boolean(post.freshly_harvested),
@@ -453,22 +435,15 @@ class CropPost {
     try {
       const [posts] = await pool.execute(query, values);
       
-      // Parse images JSON and enhance data for each post
-      const parsedPosts = posts.map(post => {
-        // Safely parse images JSON
-        let parsedImages = [];
-        try {
-          if (post.images && typeof post.images === 'string' && post.images.trim() !== '') {
-            parsedImages = JSON.parse(post.images);
-          }
-        } catch (jsonError) {
-          console.warn('Failed to parse images JSON for crop post', post.id, ':', jsonError.message);
-          parsedImages = [];
-        }
-        
+      // Fetch image URLs from crop_post_images for each post
+      const CropPostImage = require('./CropPostImage');
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      const parsedPosts = await Promise.all(posts.map(async post => {
+        const images = await CropPostImage.getByPostId(post.id);
+        const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${post.id}/images/${img.id}`);
         return {
           ...post,
-          images: parsedImages,
+          images: imageUrls,
           organic_certified: Boolean(post.organic_certified),
           pesticide_free: Boolean(post.pesticide_free),
           freshly_harvested: Boolean(post.freshly_harvested),
@@ -479,7 +454,7 @@ class CropPost {
           bulk_minimum_value: post.minimum_quantity_bulk ? 
             parseFloat(post.price_per_unit) * parseFloat(post.minimum_quantity_bulk) : null
         };
-      });
+      }));
 
       // Get total count for pagination
       const countQuery = `

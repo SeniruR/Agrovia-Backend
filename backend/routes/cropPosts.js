@@ -1,3 +1,4 @@
+
 const express = require('express');
 const CropPostController = require('../controllers/cropPostController');
 const { authenticate, authorize } = require('../middleware/auth');
@@ -5,6 +6,9 @@ const { validateCropPost, validateCropPostUpdate } = require('../middleware/crop
 const cropImageUpload = require('../config/cropImageUpload');
 
 const router = express.Router();
+
+// Serve crop post images as URLs
+router.get('/:postId/images/:imageId', CropPostController.getCropPostImage);
 
 // Public routes (no authentication required)
 router.get('/', CropPostController.getAllCropPosts);
