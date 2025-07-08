@@ -198,3 +198,57 @@ if (Buffer.isBuffer(product.images)) {
   });
 };
 */
+
+exports.getShopProductById = async (req, res) => {
+  try {
+    const product = await ShopProductModel.findById(req.params.shopitemid);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      product: {
+        id: product.id,
+        // Include only the ID or minimal essential fields
+        // Add other minimal fields if absolutely necessary
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product'
+    });
+  }
+};
+exports.deleteShopProduct = async (req, res) => {
+  try {
+    const result = await ShopProductModel.deleteById(req.params.shopitemid);
+
+    if (!result.success) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Product deleted successfully',
+      affectedRows: result.affectedRows
+    });
+
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete product'
+    });
+  }
+};
