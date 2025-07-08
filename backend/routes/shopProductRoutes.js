@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 
@@ -8,7 +9,5 @@ const validateShopProduct = require('../middleware/validateShopProduct');
 
 router.post('/', validateShopProduct, shopProductController.createShopProduct);
 router.get('/', shopProductController.getAllShopProducts);
-router.get('/:shopitemid', shopProductController.getShopProductById);
-router.delete('/:shopitemid', shopProductController.deleteShopProduct);
-//router.get('/shopitemid', shopProductController.getShopProductById);
+
 module.exports = router;

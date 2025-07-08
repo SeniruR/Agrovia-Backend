@@ -127,52 +127,12 @@ exports.getAllShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAll();
 
-    const formattedProducts = products.map(product => {
-      // Handle Boolean fields
-      const organic_certified = Boolean(product.organic_certified);
-      const terms_accepted = Boolean(product.terms_accepted);
-
-      let images = [];
-
-      // Case 1: If image is a Buffer (single image in BLOB column)
-      if (Buffer.isBuffer(product.images)) {
-        const base64Image = product.images.toString('base64');
-        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
-      }
-
-      // Case 2: If image is stored as a JSON string
-      else if (typeof product.images === 'string') {
-        if (typeof product.images === 'string') {
-  try {
-    const parsed = JSON.parse(product.images);
-    if (Array.isArray(parsed)) {
-      images = parsed.map(img => {
-        if (img.buffer && img.mimetype) {
-          return `data:${img.mimetype};base64,${img.buffer}`;
-        }
-        return img;
-      });
-    } else {
-      images = [parsed];
-    }
-  } catch (err) {
-    images = [product.images]; // fallback if not valid JSON
-  }
-}
-}
-
-if (Buffer.isBuffer(product.images)) {
-  const base64Image = product.images.toString('base64');
-  images = [`data:image/jpeg;base64,${base64Image}`];
-}
-
-      return {
-        ...product,
-        organic_certified,
-        terms_accepted,
-        images
-      };
-    });
+    const formattedProducts = products.map(product => ({
+      ...product,
+      organic_certified: Boolean(product.organic_certified),
+      terms_accepted: Boolean(product.terms_accepted),
+      images: product.images ? JSON.parse(product.images) : []
+    }));
 
     res.status(200).json(formattedProducts);
   } catch (error) {
@@ -180,86 +140,6 @@ if (Buffer.isBuffer(product.images)) {
     res.status(500).json({
       error: 'Internal server error',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
-
-/*const getShopProductById = (req, res) => {
-  const { id } = req.params;
-  const sql = 'SELECT * FROM shop_products WHERE id = ?';
-  db.query(sql, [id], (err, results) => {
-    if (err) {
-      return res.status(500).json({ message: 'Error fetching product', error: err });
-    }
-    if (results.length === 0) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    res.json(results[0]);
-  });
-};
-*/
-exports.getShopProductById = async (req, res) => {
-  try {
-    const product = await ShopProductModel.findById(req.params.shopitemid);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    // Format images
-    let images = [];
-    try {
-      images = JSON.parse(product.images || '[]');
-    } catch (e) {
-      images = [];
-    }
-
-    res.status(200).json({
-      success: true,
-      product: {
-        ...product,
-        organic_certified: Boolean(product.organic_certified),
-        terms_accepted: Boolean(product.terms_accepted),
-        images: images.map(img => ({
-          ...img,
-          url: img.buffer ? `data:${img.mimetype};base64,${img.buffer}` : null
-        }))
-      }
-    });
-
-  } catch (error) {
-    console.error('Error fetching product:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch product'
-    });
-  }
-};
-exports.deleteShopProduct = async (req, res) => {
-  try {
-    const result = await ShopProductModel.deleteById(req.params.shopitemid);
-
-    if (!result.success) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Product deleted successfully',
-      affectedRows: result.affectedRows
-    });
-
-  } catch (error) {
-    console.error('Error deleting product:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to delete product'
     });
   }
 };

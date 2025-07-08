@@ -39,24 +39,7 @@ const ShopProductModel = {
   getAll: async () => {
     const [rows] = await pool.execute('SELECT * FROM shop_products');
     return rows;
-  },
-  findById: async (shopitemid) => {
-    const [rows] = await pool.execute(
-      'SELECT * FROM shop_products WHERE shopitemid = ?',
-      [shopitemid]
-    );
-    return rows[0] || null;
-  },
-  deleteById: async (shopitemid) => {
-    const [result] = await pool.execute(
-      'DELETE FROM shop_products WHERE shopitemid = ?',
-      [shopitemid]
-    );
-    return {
-      success: result.affectedRows > 0,
-      affectedRows: result.affectedRows
-    };
-  },
+  }
 };
 
 module.exports = ShopProductModel;
