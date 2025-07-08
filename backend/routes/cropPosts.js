@@ -9,6 +9,15 @@ const router = express.Router();
 // Public routes (no authentication required)
 router.get('/', CropPostController.getAllCropPosts);
 router.get('/stats', CropPostController.getCropPostStats);
+
+// Enhanced public routes for retrieving crop posts with bulk quantity details
+// These must come BEFORE the /:id route to avoid conflicts
+router.get('/enhanced', CropPostController.getAllCropPostsEnhanced);
+router.get('/districts', CropPostController.getAvailableDistricts);
+router.get('/bulk-orders', CropPostController.getBulkOrderCrops);
+router.get('/enhanced/:id', CropPostController.getCropPostByIdEnhanced);
+
+// Parameterized routes (must come after specific routes)
 router.get('/:id', CropPostController.getCropPostById);
 
 // Protected farmer routes (require authentication)

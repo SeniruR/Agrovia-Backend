@@ -1,4 +1,5 @@
 const { pool } = require('../config/database');
+const CropPost = require('../models/CropPost');
 
 class CropPostController {
   // Create new crop post
@@ -164,6 +165,109 @@ class CropPostController {
     }
   }
 
+  // Get all crop posts with enhanced details including bulk quantities
+  static async getAllCropPostsEnhanced(req, res) {
+    try {
+      console.log('📋 Get enhanced crop posts request received');
+      
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const filters = {
+        crop_category: req.query.category,
+        district: req.query.district,
+        crop_name: req.query.search,
+        min_price: req.query.min_price,
+        max_price: req.query.max_price,
+        has_bulk_pricing: req.query.bulk_only === 'true'
+      };
+
+      // Remove undefined filters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined || filters[key] === '') {
+          delete filters[key];
+        }
+      });
+
+      const result = await CropPost.getAllWithBulkDetails(page, limit, filters);
+
+      res.json({
+        success: true,
+        message: 'Enhanced crop posts retrieved successfully',
+        data: result.posts,
+        pagination: result.pagination,
+        filters_applied: filters
+      });
+    } catch (error) {
+      console.error('❌ Get enhanced crop posts error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve enhanced crop posts',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get available districts from crop posts
+  static async getAvailableDistricts(req, res) {
+    try {
+      console.log('🗺️ Get available districts request received');
+      
+      const result = await CropPost.getAvailableDistricts();
+
+      res.json({
+        success: true,
+        message: 'Available districts retrieved successfully',
+        data: result
+      });
+    } catch (error) {
+      console.error('❌ Get available districts error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve available districts',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get crop posts suitable for bulk orders
+  static async getBulkOrderCrops(req, res) {
+    try {
+      console.log('📦 Get bulk order crops request received');
+      
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const filters = {
+        district: req.query.district,
+        crop_category: req.query.category,
+        max_bulk_cost: req.query.max_bulk_cost
+      };
+
+      // Remove undefined filters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined || filters[key] === '') {
+          delete filters[key];
+        }
+      });
+
+      const result = await CropPost.getBulkOrderCrops(page, limit, filters);
+
+      res.json({
+        success: true,
+        message: 'Bulk order crops retrieved successfully',
+        data: result.bulk_crops,
+        summary: result.summary,
+        filters_applied: filters
+      });
+    } catch (error) {
+      console.error('❌ Get bulk order crops error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve bulk order crops',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
   // Get crop post by ID
   static async getCropPostById(req, res) {
     try {
@@ -203,6 +307,36 @@ class CropPostController {
       res.status(500).json({
         success: false,
         message: 'Failed to retrieve crop post',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get crop post by ID with enhanced details
+  static async getCropPostByIdEnhanced(req, res) {
+    try {
+      const { id } = req.params;
+      console.log('📋 Get enhanced crop post by ID request received for ID:', id);
+      
+      const post = await CropPost.getById(id);
+      
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: 'Crop post not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Enhanced crop post retrieved successfully',
+        data: post
+      });
+    } catch (error) {
+      console.error('❌ Get enhanced crop post by ID error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve enhanced crop post',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       });
     }
