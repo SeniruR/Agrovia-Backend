@@ -161,6 +161,7 @@ class CropPostController {
         SELECT cp.*, u.full_name as user_name
         FROM crop_posts cp
         LEFT JOIN users u ON cp.farmer_id = u.id
+        WHERE cp.status != 'deleted'
         ORDER BY cp.created_at DESC
         LIMIT 50
       `;
@@ -302,7 +303,7 @@ class CropPostController {
         SELECT cp.*, u.full_name as user_name
         FROM crop_posts cp
         LEFT JOIN users u ON cp.farmer_id = u.id
-        WHERE cp.id = ?
+        WHERE cp.id = ? AND cp.status != 'deleted'
       `;
       const [rows] = await pool.execute(query, [id]);
       if (rows.length === 0) {
@@ -376,7 +377,7 @@ class CropPostController {
       console.log('� Getting crop posts for farmer ID:', farmerId);
       const query = `
         SELECT * FROM crop_posts 
-        WHERE farmer_id = ? 
+        WHERE farmer_id = ? AND status != 'deleted'
         ORDER BY created_at DESC
       `;
       const [rows] = await pool.execute(query, [farmerId]);
@@ -472,21 +473,19 @@ class CropPostController {
   static async deleteCropPost(req, res) {
     try {
       const { id } = req.params;
-      
-      const query = 'DELETE FROM crop_posts WHERE id = ?';
-      const [result] = await pool.execute(query, [id]);
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Crop post not found'
-        });
+      const user = req.user;
+      // Debug log for troubleshooting
+      console.log('Delete attempt:', { user, postId: id });
+      if (!user || user.role !== 'farmer') {
+        return res.status(403).json({ success: false, message: 'Only farmers can delete their crop posts.' });
       }
-
-      res.json({
-        success: true,
-        message: 'Crop post deleted successfully'
-      });
+      // Soft delete: set status = 'deleted' for this farmer's post
+      const query = 'UPDATE crop_posts SET status = \'deleted\', updated_at = NOW() WHERE id = ? AND farmer_id = ?';
+      const [result] = await pool.execute(query, [id, user.id]);
+      if (result.affectedRows === 0) {
+        return res.status(403).json({ success: false, message: 'Insufficient permissions (not owner or not found)' });
+      }
+      return res.json({ success: true, message: 'Crop post deleted (soft) successfully' });
     } catch (error) {
       console.error('❌ Delete crop post error:', error);
       res.status(500).json({
@@ -536,19 +535,43 @@ class CropPostController {
   }
 
   // Update crop post status (admin only)
-  static async updateCropPostStatus(req, res) {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
+  // Update crop post status (admin or post owner farmer only)
+// Update crop post status (admin or post owner farmer only)
+static async updateCropPostStatus(req, res) {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const user = req.user;
 
-      const validStatuses = ['pending', 'approved', 'rejected', 'sold', 'available'];
-      if (!validStatuses.includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid status value'
-        });
-      }
+    // Allow 'deleted' as a valid status
+    const validStatuses = ['pending', 'approved', 'rejected', 'sold', 'available', 'deleted'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status value'
+      });
+    }
 
+    // Fetch the post to check ownership
+    const [rows] = await pool.execute('SELECT farmer_id FROM crop_posts WHERE id = ?', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Crop post not found' });
+    }
+    const post = rows[0];
+
+    // 🔍 Debug logging for troubleshooting permissions
+    console.log('🔒 Permission Debug:', {
+      userId: user?.id,
+      userRole: user?.role,
+      postFarmerId: post.farmer_id,
+      requestedStatus: status
+    });
+
+    // ✅ Permission check
+    if (
+      (user.role === 'admin') ||
+      (user.role === 'farmer' && String(user.id) === String(post.farmer_id) && status === 'deleted')
+    ) {
       const query = 'UPDATE crop_posts SET status = ? WHERE id = ?';
       const [result] = await pool.execute(query, [status, id]);
 
@@ -559,19 +582,34 @@ class CropPostController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
-        message: 'Crop post status updated successfully'
+        message: `Crop post status updated to ${status} successfully`
       });
-    } catch (error) {
-      console.error('❌ Update crop post status error:', error);
-      res.status(500).json({
+    } else {
+      console.warn('❌ Insufficient permissions:', {
+        userId: user?.id,
+        userRole: user?.role,
+        postOwnerId: post.farmer_id,
+        attemptedStatus: status
+      });
+
+      return res.status(403).json({
         success: false,
-        message: 'Failed to update crop post status',
-        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        message: 'Insufficient permissions'
       });
     }
+  } catch (error) {
+    console.error('❌ Update crop post status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update crop post status',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
+}
+
+
 }
 
 module.exports = CropPostController;

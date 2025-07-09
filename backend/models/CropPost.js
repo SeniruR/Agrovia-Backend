@@ -22,6 +22,7 @@ class CropPost {
       freshly_harvested,
       contact_number,
       email,
+      status,
       images
     } = cropData;
 
@@ -31,7 +32,7 @@ class CropPost {
         price_per_unit, minimum_quantity_bulk, harvest_date, expiry_date, location, district,
         description, organic_certified, pesticide_free, freshly_harvested,
         contact_number, email, images, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW())
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
     const values = [
@@ -57,7 +58,8 @@ class CropPost {
       freshly_harvested ? 1 : 0,
       contact_number,
       email || null,
-      JSON.stringify(images || [])
+      JSON.stringify(images || []),
+      status || 'active'
     ];
 
     try {
@@ -69,14 +71,14 @@ class CropPost {
     }
   }
 
-  // Get all crop posts with pagination
+  // Get all crop posts with pagination (exclude deleted)
   static async getAll(page = 1, limit = 10, filters = {}) {
     const offset = (page - 1) * limit;
     let query = `
       SELECT cp.*, u.full_name as farmer_name
       FROM crop_posts cp
       LEFT JOIN users u ON cp.farmer_id = u.id
-      WHERE cp.status = 'active'
+      WHERE cp.status != 'deleted'
     `;
     const values = [];
 
@@ -125,7 +127,7 @@ class CropPost {
       const countQuery = `
         SELECT COUNT(*) as total
         FROM crop_posts cp
-        WHERE cp.status = 'active'
+        WHERE cp.status != 'deleted'
         ${filters.crop_category ? 'AND cp.crop_category = ?' : ''}
         ${filters.district ? 'AND cp.district = ?' : ''}
         ${filters.crop_name ? 'AND cp.crop_name LIKE ?' : ''}
@@ -157,7 +159,7 @@ class CropPost {
     }
   }
 
-  // Get crop post by ID
+  // Get crop post by ID (exclude deleted)
   static async getById(id) {
     const query = `
       SELECT 
@@ -172,7 +174,7 @@ class CropPost {
         END as bulk_info
       FROM crop_posts cp
       LEFT JOIN users u ON cp.farmer_id = u.id
-      WHERE cp.id = ? AND cp.status = 'active'
+      WHERE cp.id = ? AND cp.status != 'deleted'
     `;
 
     try {
