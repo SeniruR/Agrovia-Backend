@@ -1,9 +1,6 @@
+const TransportComplaint = require('../models/TransportComplaint');
 
-const ShopComplaint = require('../models/ShopComplaint');
-const ShopComplaintAttachment = require('../models/ShopComplaintAttachment');
-const path = require('path');
-
-// Create a new shop complaint (with multiple BLOB attachments)
+// Create a new transport complaint (with BLOB attachments in main table)
 exports.createComplaint = async (req, res, next) => {
   try {
     const {
@@ -11,37 +8,39 @@ exports.createComplaint = async (req, res, next) => {
       description,
       submittedBy,
       priority,
-      shopName,
+      transportCompany,
       location,
       category,
       orderNumber,
-      purchaseDate
+      deliveryDate,
+      trackingNumber,
+      status
     } = req.body;
 
-    let attachments = req.body.attachments;
-    // Handle file uploads
+    // Combine all uploaded files into a single BLOB array (as Buffer)
+    let attachments = null;
     if (req.files && req.files.length > 0) {
-      attachments = req.files.map(file => file.filename);
+      // Store as JSON array of base64 strings (or Buffer array for MySQL LONGBLOB)
+      attachments = JSON.stringify(req.files.map(file => file.buffer.toString('base64')));
     }
 
     // Save complaint
-    const result = await ShopComplaint.create({
+    const result = await TransportComplaint.create({
       title,
       description,
       submittedBy,
       priority,
-      shopName,
+      transportCompany,
       location,
       category,
-      orderNumber,
-      purchaseDate,
-      attachments 
+      orderNumber: orderNumber === '' ? null : orderNumber,
+      deliveryDate: deliveryDate === '' ? null : deliveryDate,
+      trackingNumber: trackingNumber === '' ? null : trackingNumber,
+      status: status || 'not consider',
+      attachments
     });
-    const complaintId = result.insertId;
 
-    // Save each attachment as a BLOB in shop_complaint_attachments
-
-    res.status(201).json({ success: true, message: 'Complaint submitted', id: complaintId });
+    res.status(201).json({ success: true, message: 'Complaint submitted', id: result.insertId });
   } catch (error) {
     next(error);
   }
@@ -50,7 +49,7 @@ exports.createComplaint = async (req, res, next) => {
 // Get all complaints
 exports.getAllComplaints = async (req, res, next) => {
   try {
-    const complaints = await ShopComplaint.findAll();
+    const complaints = await TransportComplaint.findAll();
     res.json(complaints);
   } catch (error) {
     next(error);
@@ -60,23 +59,19 @@ exports.getAllComplaints = async (req, res, next) => {
 // Get a single complaint by ID (with attachment metadata)
 exports.getComplaintById = async (req, res, next) => {
   try {
-    const complaint = await ShopComplaint.findById(req.params.id);
+    const complaint = await TransportComplaint.findById(req.params.id);
     if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
-    // Get attachment metadata
-    const attachments = await ShopComplaintAttachment.findByComplaintId(req.params.id);
-    res.json({ ...complaint, attachments });
+    // const attachments = await TransportComplaintAttachment.findByComplaintId(req.params.id);
+    res.json({ ...complaint });
   } catch (error) {
     next(error);
   }
 };
 
-// Download a single attachment by attachment ID
-
-
 // Update a complaint
 exports.updateComplaint = async (req, res, next) => {
   try {
-    const result = await ShopComplaint.update(req.params.id, req.body);
+    const result = await TransportComplaint.update(req.params.id, req.body);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Complaint not found' });
     res.json({ success: true, message: 'Complaint updated' });
   } catch (error) {
@@ -87,7 +82,7 @@ exports.updateComplaint = async (req, res, next) => {
 // Delete a complaint
 exports.deleteComplaint = async (req, res, next) => {
   try {
-    const result = await ShopComplaint.delete(req.params.id);
+    const result = await TransportComplaint.delete(req.params.id);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Complaint not found' });
     res.json({ success: true, message: 'Complaint deleted' });
   } catch (error) {
