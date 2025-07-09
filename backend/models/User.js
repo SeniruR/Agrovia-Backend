@@ -33,7 +33,7 @@ class User {
       `;
       const userValues = [
         full_name, email, password_hash, phone_number, district, nic,
-        address ?? null, profile_image ?? null, user_type, 1 // always active on create
+        address ?? null, profile_image ?? null, user_type, 0 // always inactive on create
       ];
 
       try {
