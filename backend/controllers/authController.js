@@ -142,6 +142,7 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const { generateToken } = require('../middleware/auth');
 const { hashPassword, comparePassword, sanitizeUser, formatResponse } = require('../utils/helpers');
+const FarmerDetails = require('../models/FarmerDetails');
 
 // Register farmer
 const registerFarmer = async (req, res, next) => {
@@ -380,6 +381,29 @@ const getProfile = async (req, res, next) => {
   }
 };
 
+// Get current user profile with farmer details
+const getProfileWithFarmerDetails = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    let farmerDetails = null;
+    if (user.user_type === 1) { // 1 = farmer
+      farmerDetails = await FarmerDetails.findByUserId(user.id);
+    }
+    res.json({
+      success: true,
+      user: {
+        ...sanitizeUser(user),
+        farmer_details: farmerDetails
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Get all users (admin only)
 const getAllUsers = async (req, res, next) => {
   try {
@@ -404,5 +428,6 @@ module.exports = {
   getProfile,
   getAllUsers,
   registerBuyer,
-  registerShopOwner
+  registerShopOwner,
+  getProfileWithFarmerDetails
 };

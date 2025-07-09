@@ -1,25 +1,25 @@
 const { pool } = require('../config/database');
 
-class ShopComplaint {
-  // Create a new shop complaint
+class CropComplaint {
+  // Create a new crop complaint
   static async create(complaint) {
     const {
       title,
       description,
       submittedBy,
       priority,
-      shopName,
-      location,
+      cropType,
+      farmer,
       category,
       orderNumber,
-      purchaseDate,
-      attachments
+      status = 'not consider',
+      attachments = null // images as BLOB
     } = complaint;
 
     const query = `
-      INSERT INTO shop_complaints
-        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date,attachments)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+      INSERT INTO crop_complaints
+        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, status, attachments)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -27,12 +27,12 @@ class ShopComplaint {
         description ?? null,
         submittedBy ?? null,
         priority ?? null,
-        shopName ?? null,
-        location ?? null,
+        cropType ?? null,
+        farmer ?? null,
         category ?? null,
         orderNumber ?? null,
-        purchaseDate ? purchaseDate : null,
-        attachments ?? null
+        status ?? 'not consider',
+        attachments
       ]);
       return result;
     } catch (error) {
@@ -42,7 +42,7 @@ class ShopComplaint {
 
   // Get all complaints
   static async findAll() {
-    const query = 'SELECT * FROM shop_complaints ORDER BY created_at DESC';
+    const query = 'SELECT * FROM crop_complaints ORDER BY id DESC';
     try {
       const [rows] = await pool.execute(query);
       return rows;
@@ -53,7 +53,7 @@ class ShopComplaint {
 
   // Get complaint by ID
   static async findById(id) {
-    const query = 'SELECT * FROM shop_complaints WHERE id = ?';
+    const query = 'SELECT * FROM crop_complaints WHERE id = ?';
     try {
       const [rows] = await pool.execute(query, [id]);
       return rows[0];
@@ -62,27 +62,26 @@ class ShopComplaint {
     }
   }
 
-  // Update complaint
-  static async update(id, data) {
+  // Update a complaint
+  static async update(id, updates) {
     const fields = [];
     const values = [];
-    for (const key in data) {
+    for (const key in updates) {
       fields.push(`${key} = ?`);
-      values.push(data[key]);
+      values.push(updates[key]);
     }
-    const query = `UPDATE shop_complaints SET ${fields.join(', ')} WHERE id = ?`;
-    values.push(id);
+    const query = `UPDATE crop_complaints SET ${fields.join(', ')} WHERE id = ?`;
     try {
-      const [result] = await pool.execute(query, values);
+      const [result] = await pool.execute(query, [...values, id]);
       return result;
     } catch (error) {
       throw error;
     }
   }
 
-  // Delete complaint
+  // Delete a complaint
   static async delete(id) {
-    const query = 'DELETE FROM shop_complaints WHERE id = ?';
+    const query = 'DELETE FROM crop_complaints WHERE id = ?';
     try {
       const [result] = await pool.execute(query, [id]);
       return result;
@@ -92,4 +91,4 @@ class ShopComplaint {
   }
 }
 
-module.exports = ShopComplaint;
+module.exports = CropComplaint;

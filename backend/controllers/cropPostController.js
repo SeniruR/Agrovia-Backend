@@ -1,16 +1,50 @@
 const { pool } = require('../config/database');
+const fs = require('fs');
+const path = require('path');
+const CropPost = require('../models/CropPost');
+const CropPostImage = require('../models/CropPostImage');
 
 class CropPostController {
+  // Serve a crop post image as a URL
+  static async getCropPostImage(req, res) {
+    try {
+      const { postId, imageId } = req.params;
+      const images = await CropPostImage.getByPostId(postId);
+      const image = images.find(img => img.id == imageId);
+      if (!image) {
+        return res.status(404).send('Image not found');
+      }
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.set('Content-Type', 'image/jpeg'); // You may want to store and use the real mimetype
+      res.send(image.image);
+    } catch (err) {
+      res.status(500).send('Error retrieving image');
+    }
+  }
   // Create new crop post
   static async createCropPost(req, res) {
     try {
       console.log('📝 Create crop post request received');
-      console.log('Request body:', req.body);
-      console.log('Request files:', req.files);
-      
-      // For testing, let's use a mock user ID
-      const userId = req.user?.id || 1; // Default to 1 for testing
-      
+
+      // Get the farmer ID from the authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+
+      if (req.user.role !== 'farmer') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only farmers can create crop posts.'
+        });
+      }
+
+      const farmerId = req.user.id;
+      console.log('✅ Creating crop post for farmer ID:', farmerId);
+
       const {
         crop_category = 'vegetables',
         crop_name = '',
@@ -18,6 +52,7 @@ class CropPostController {
         quantity = 0,
         unit = 'kg',
         price_per_unit = 0,
+        minimum_quantity_bulk = null,
         harvest_date = null,
         expiry_date = null,
         location = '',
@@ -30,63 +65,78 @@ class CropPostController {
         freshly_harvested = false
       } = req.body;
 
-      // Handle uploaded images
-      let images = [];
-      if (req.files && req.files.length > 0) {
-        images = req.files.map(file => ({
-          filename: file.filename,
-          originalname: file.originalname,
-          path: `/uploads/crop-images/${file.filename}`,
-          size: file.size
-        }));
+      // Ensure minimum_quantity_bulk is stored as null if blank/invalid
+      let minBulk = minimum_quantity_bulk;
+      if (minBulk === '' || minBulk === undefined || minBulk === null) {
+        minBulk = null;
+      } else if (!isNaN(minBulk)) {
+        minBulk = Number(minBulk);
+        if (isNaN(minBulk)) minBulk = null;
+      } else {
+        minBulk = null;
       }
 
+      // Insert crop post (without images column)
       const query = `
         INSERT INTO crop_posts (
-          farmer_id, crop_category, crop_name, variety, quantity, unit, 
-          price_per_unit, harvest_date, expiry_date, location, district, 
-          description, contact_number, email, organic_certified, 
-          pesticide_free, freshly_harvested, images
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          farmer_id, crop_category, crop_name, variety, quantity, unit,
+          price_per_unit, minimum_quantity_bulk, harvest_date, expiry_date, location, district,
+          description, contact_number, email, organic_certified,
+          pesticide_free, freshly_harvested, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', NOW())
       `;
 
       const values = [
-        userId, 
-        crop_category, 
-        crop_name, 
-        variety, 
-        quantity, 
+        farmerId,
+        crop_category,
+        crop_name,
+        variety,
+        quantity,
         unit,
-        price_per_unit, 
-        harvest_date, 
-        expiry_date, 
-        location, 
+        price_per_unit,
+        minBulk,
+        harvest_date,
+        expiry_date,
+        location,
         district,
-        description, 
-        contact_number, 
+        description,
+        contact_number,
         email,
         organic_certified === 'true' || organic_certified === true,
         pesticide_free === 'true' || pesticide_free === true,
-        freshly_harvested === 'true' || freshly_harvested === true,
-        JSON.stringify(images)
+        freshly_harvested === 'true' || freshly_harvested === true
       ];
 
-      console.log('Executing query with values:', values);
       const [result] = await pool.execute(query, values);
-      console.log('✅ Crop post created with ID:', result.insertId);
+      const postId = result.insertId;
+      console.log('✅ Crop post created with ID:', postId);
+
+      // Handle uploaded images: store as BLOBs in crop_post_images
+      let imageIds = [];
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          const imageBuffer = fs.readFileSync(file.path);
+          const imageId = await CropPostImage.insert(postId, imageBuffer);
+          imageIds.push(imageId);
+          // Clean up file after reading
+          fs.unlink(file.path, (err) => {
+            if (err) console.error('Error deleting file:', err);
+          });
+        }
+      }
 
       res.status(201).json({
         success: true,
         message: 'Crop post created successfully',
         data: {
-          id: result.insertId,
+          id: postId,
+          farmer_id: farmerId,
           ...req.body,
-          images
+          imageIds
         }
       });
     } catch (error) {
       console.error('❌ Create crop post error:', error);
-      
       // Clean up uploaded files if database operation fails
       if (req.files && req.files.length > 0) {
         req.files.forEach(file => {
@@ -95,7 +145,6 @@ class CropPostController {
           });
         });
       }
-
       res.status(500).json({
         success: false,
         message: 'Failed to create crop post',
@@ -108,7 +157,6 @@ class CropPostController {
   static async getAllCropPosts(req, res) {
     try {
       console.log('📋 Get all crop posts request received');
-      
       const query = `
         SELECT cp.*, u.full_name as user_name
         FROM crop_posts cp
@@ -116,23 +164,17 @@ class CropPostController {
         ORDER BY cp.created_at DESC
         LIMIT 50
       `;
-
       const [rows] = await pool.execute(query);
-      const cropPosts = rows.map(post => {
-        let images = [];
-        try {
-          images = JSON.parse(post.images || '[]');
-        } catch (e) {
-          console.warn('Failed to parse images JSON for post', post.id, ':', e.message);
-          images = [];
-        }
-        
+      // For each post, fetch image URLs
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      const cropPosts = await Promise.all(rows.map(async post => {
+        const images = await CropPostImage.getByPostId(post.id);
+        const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${post.id}/images/${img.id}`);
         return {
           ...post,
-          images
+          images: imageUrls
         };
-      });
-
+      }));
       res.json({
         success: true,
         message: 'Crop posts retrieved successfully',
@@ -149,35 +191,132 @@ class CropPostController {
     }
   }
 
+  // Get all crop posts with enhanced details including bulk quantities
+  static async getAllCropPostsEnhanced(req, res) {
+    try {
+      console.log('📋 Get enhanced crop posts request received');
+      
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const filters = {
+        crop_category: req.query.category,
+        district: req.query.district,
+        crop_name: req.query.search,
+        min_price: req.query.min_price,
+        max_price: req.query.max_price,
+        has_bulk_pricing: req.query.bulk_only === 'true'
+      };
+
+      // Remove undefined filters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined || filters[key] === '') {
+          delete filters[key];
+        }
+      });
+
+      const result = await CropPost.getAllWithBulkDetails(page, limit, filters);
+
+      res.json({
+        success: true,
+        message: 'Enhanced crop posts retrieved successfully',
+        data: result.posts,
+        pagination: result.pagination,
+        filters_applied: filters
+      });
+    } catch (error) {
+      console.error('❌ Get enhanced crop posts error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve enhanced crop posts',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get available districts from crop posts
+  static async getAvailableDistricts(req, res) {
+    try {
+      console.log('🗺️ Get available districts request received');
+      
+      const result = await CropPost.getAvailableDistricts();
+
+      res.json({
+        success: true,
+        message: 'Available districts retrieved successfully',
+        data: result
+      });
+    } catch (error) {
+      console.error('❌ Get available districts error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve available districts',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
+  // Get crop posts suitable for bulk orders
+  static async getBulkOrderCrops(req, res) {
+    try {
+      console.log('📦 Get bulk order crops request received');
+      
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const filters = {
+        district: req.query.district,
+        crop_category: req.query.category,
+        max_bulk_cost: req.query.max_bulk_cost
+      };
+
+      // Remove undefined filters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] === undefined || filters[key] === '') {
+          delete filters[key];
+        }
+      });
+
+      const result = await CropPost.getBulkOrderCrops(page, limit, filters);
+
+      res.json({
+        success: true,
+        message: 'Bulk order crops retrieved successfully',
+        data: result.bulk_crops,
+        summary: result.summary,
+        filters_applied: filters
+      });
+    } catch (error) {
+      console.error('❌ Get bulk order crops error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve bulk order crops',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
   // Get crop post by ID
   static async getCropPostById(req, res) {
     try {
       const { id } = req.params;
-      
       const query = `
         SELECT cp.*, u.full_name as user_name
         FROM crop_posts cp
         LEFT JOIN users u ON cp.farmer_id = u.id
         WHERE cp.id = ?
       `;
-
       const [rows] = await pool.execute(query, [id]);
-      
       if (rows.length === 0) {
         return res.status(404).json({
           success: false,
           message: 'Crop post not found'
         });
       }
-
       const post = rows[0];
-      try {
-        post.images = JSON.parse(post.images || '[]');
-      } catch (e) {
-        console.warn('Failed to parse images JSON for post', post.id, ':', e.message);
-        post.images = [];
-      }
-
+      // Fetch image URLs
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      const images = await CropPostImage.getByPostId(post.id);
+      const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${post.id}/images/${img.id}`);
+      post.images = imageUrls;
       res.json({
         success: true,
         message: 'Crop post retrieved successfully',
@@ -193,33 +332,63 @@ class CropPostController {
     }
   }
 
+  // Get crop post by ID with enhanced details
+  static async getCropPostByIdEnhanced(req, res) {
+    try {
+      const { id } = req.params;
+      console.log('📋 Get enhanced crop post by ID request received for ID:', id);
+      
+      const post = await CropPost.getById(id);
+      
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: 'Crop post not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Enhanced crop post retrieved successfully',
+        data: post
+      });
+    } catch (error) {
+      console.error('❌ Get enhanced crop post by ID error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve enhanced crop post',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
   // Get user's crop posts
   static async getUserCropPosts(req, res) {
     try {
-      const userId = req.user?.id || 1; // Default for testing
-      
+      // Get the farmer ID from the authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+      const farmerId = req.user.id;
+      console.log('� Getting crop posts for farmer ID:', farmerId);
       const query = `
         SELECT * FROM crop_posts 
         WHERE farmer_id = ? 
         ORDER BY created_at DESC
       `;
-
-      const [rows] = await pool.execute(query, [userId]);
-      const cropPosts = rows.map(post => {
-        let images = [];
-        try {
-          images = JSON.parse(post.images || '[]');
-        } catch (e) {
-          console.warn('Failed to parse images JSON for post', post.id, ':', e.message);
-          images = [];
-        }
-        
+      const [rows] = await pool.execute(query, [farmerId]);
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      const cropPosts = await Promise.all(rows.map(async post => {
+        const images = await CropPostImage.getByPostId(post.id);
+        const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${post.id}/images/${img.id}`);
         return {
           ...post,
-          images
+          images: imageUrls
         };
-      });
-
+      }));
       res.json({
         success: true,
         message: 'User crop posts retrieved successfully',
