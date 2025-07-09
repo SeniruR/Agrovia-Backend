@@ -54,9 +54,10 @@ router.delete('/:id',
 );
 
 // Admin routes
+// Allow both admin and farmer to PATCH status, but permission logic is enforced in controller
 router.patch('/:id/status',
   authenticate,
-  authorize(['admin']),
+  authorize(['admin', 'farmer']),
   CropPostController.updateCropPostStatus
 );
 

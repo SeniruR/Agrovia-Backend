@@ -112,10 +112,10 @@ class CropPostAPI {
     }
   }
 
-  // Get farmer's crop posts
+  // Get farmer's crop posts (updated endpoint to match backend route)
   static async getFarmerCropPosts(page = 1, limit = 10) {
     try {
-      const response = await fetch(`${API_BASE_URL}/crop-posts/farmer/my-posts?page=${page}&limit=${limit}`, {
+      const response = await fetch(`${API_BASE_URL}/crop-posts/user/my-posts?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: this.getHeaders()
       });
