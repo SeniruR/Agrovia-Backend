@@ -16,10 +16,15 @@ class CropComplaint {
       attachments = null // images as BLOB
     } = complaint;
 
+    // Ensure attachments is always a JSON stringified array
+    let attachmentsStr = '[]';
+    if (Array.isArray(attachments)) attachmentsStr = JSON.stringify(attachments);
+    else if (attachments) attachmentsStr = JSON.stringify([attachments]);
+
     const query = `
       INSERT INTO crop_complaints
-        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, status, attachments)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, status, attachments, submitted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -32,7 +37,8 @@ class CropComplaint {
         category ?? null,
         orderNumber ?? null,
         status ?? 'not consider',
-        attachments
+        attachmentsStr,
+        new Date() // submitted_at as current timestamp
       ]);
       return result;
     } catch (error) {
@@ -42,10 +48,14 @@ class CropComplaint {
 
   // Get all complaints
   static async findAll() {
-    const query = 'SELECT * FROM crop_complaints ORDER BY id DESC';
+    const query = 'SELECT * FROM crop_complaints ORDER BY submitted_at DESC';
     try {
       const [rows] = await pool.execute(query);
-      return rows;
+      // Parse attachments JSON for each row
+      return rows.map(row => ({
+        ...row,
+        attachments: row.attachments ? JSON.parse(row.attachments) : [],
+      }));
     } catch (error) {
       throw error;
     }
@@ -56,30 +66,43 @@ class CropComplaint {
     const query = 'SELECT * FROM crop_complaints WHERE id = ?';
     try {
       const [rows] = await pool.execute(query, [id]);
-      return rows[0];
+      if (!rows[0]) return null;
+      return {
+        ...rows[0],
+        attachments: rows[0].attachments ? JSON.parse(rows[0].attachments) : [],
+      };
     } catch (error) {
       throw error;
     }
   }
 
-  // Update a complaint
-  static async update(id, updates) {
+  // Update complaint
+  static async update(id, data) {
     const fields = [];
     const values = [];
-    for (const key in updates) {
-      fields.push(`${key} = ?`);
-      values.push(updates[key]);
+    for (const key in data) {
+      if (key === 'attachments') {
+        // Always store as JSON string
+        if (Array.isArray(data[key])) values.push(JSON.stringify(data[key]));
+        else if (data[key]) values.push(JSON.stringify([data[key]]));
+        else values.push('[]');
+        fields.push('attachments = ?');
+      } else {
+        fields.push(`${key} = ?`);
+        values.push(data[key]);
+      }
     }
     const query = `UPDATE crop_complaints SET ${fields.join(', ')} WHERE id = ?`;
+    values.push(id);
     try {
-      const [result] = await pool.execute(query, [...values, id]);
+      const [result] = await pool.execute(query, values);
       return result;
     } catch (error) {
       throw error;
     }
   }
 
-  // Delete a complaint
+  // Delete complaint
   static async delete(id) {
     const query = 'DELETE FROM crop_complaints WHERE id = ?';
     try {
