@@ -36,7 +36,7 @@ exports.createComplaint = async (req, res, next) => {
       orderNumber: orderNumber === '' ? null : orderNumber,
       deliveryDate: deliveryDate === '' ? null : deliveryDate,
       trackingNumber: trackingNumber === '' ? null : trackingNumber,
-      status: status || 'not consider',
+      status: status===''?'not consider':status,
       attachments
     });
 
