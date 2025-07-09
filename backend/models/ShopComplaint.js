@@ -16,10 +16,15 @@ class ShopComplaint {
       attachments
     } = complaint;
 
+    // Ensure attachments is always a JSON stringified array
+    let attachmentsStr = '[]';
+    if (Array.isArray(attachments)) attachmentsStr = JSON.stringify(attachments);
+    else if (attachments) attachmentsStr = JSON.stringify([attachments]);
+
     const query = `
       INSERT INTO shop_complaints
-        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date,attachments)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date, attachments, submitted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -32,7 +37,8 @@ class ShopComplaint {
         category ?? null,
         orderNumber ?? null,
         purchaseDate ? purchaseDate : null,
-        attachments ?? null
+        attachmentsStr,
+        new Date() // submitted_at as current timestamp
       ]);
       return result;
     } catch (error) {
@@ -42,10 +48,14 @@ class ShopComplaint {
 
   // Get all complaints
   static async findAll() {
-    const query = 'SELECT * FROM shop_complaints ORDER BY created_at DESC';
+    const query = 'SELECT * FROM shop_complaints ORDER BY submitted_at DESC';
     try {
       const [rows] = await pool.execute(query);
-      return rows;
+      // Parse attachments JSON for each row
+      return rows.map(row => ({
+        ...row,
+        attachments: row.attachments ? JSON.parse(row.attachments) : [],
+      }));
     } catch (error) {
       throw error;
     }
@@ -56,7 +66,11 @@ class ShopComplaint {
     const query = 'SELECT * FROM shop_complaints WHERE id = ?';
     try {
       const [rows] = await pool.execute(query, [id]);
-      return rows[0];
+      if (!rows[0]) return null;
+      return {
+        ...rows[0],
+        attachments: rows[0].attachments ? JSON.parse(rows[0].attachments) : [],
+      };
     } catch (error) {
       throw error;
     }
@@ -67,8 +81,16 @@ class ShopComplaint {
     const fields = [];
     const values = [];
     for (const key in data) {
-      fields.push(`${key} = ?`);
-      values.push(data[key]);
+      if (key === 'attachments') {
+        // Always store as JSON string
+        if (Array.isArray(data[key])) values.push(JSON.stringify(data[key]));
+        else if (data[key]) values.push(JSON.stringify([data[key]]));
+        else values.push('[]');
+        fields.push('attachments = ?');
+      } else {
+        fields.push(`${key} = ?`);
+        values.push(data[key]);
+      }
     }
     const query = `UPDATE shop_complaints SET ${fields.join(', ')} WHERE id = ?`;
     values.push(id);
