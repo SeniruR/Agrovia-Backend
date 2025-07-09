@@ -190,6 +190,108 @@ exports.getShopProductById = async (req, res) => {
       return res.status(404).json({ error: 'Shop product not found', shopitemid });
     }
   } catch (error) {
+
+    console.error('Error deleting product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete product'
+    });
+  }
+
+};
+
+exports.updateProduct = async (req, res) => {
+  try {
+    const { shopitemid } = req.params;
+
+    // Debug logs
+    console.log('Request body:', req.body);
+    console.log('Uploaded files count:', req.files?.length || 0);
+
+    // Initialize update data with sanitized fields
+    const updateData = {
+      ...req.body,
+      // Convert string booleans to actual booleans
+      organic_certified: req.body.organic_certified === 'true',
+      // Convert string numbers to actual numbers
+      price: parseFloat(req.body.price),
+      available_quantity: parseInt(req.body.available_quantity)
+    };
+
+    // Handle image updates
+    if (req.files && req.files.length > 0) {
+      // Process new uploaded files (assuming you're using Cloudinary or similar)
+      const uploadResults = await Promise.all(
+        req.files.map(file => {
+          return new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+              { folder: 'shop-products' },
+              (error, result) => {
+                if (error) reject(error);
+                else resolve(result.secure_url);
+              }
+            ).end(file.buffer);
+          });
+        })
+      );
+      
+      // Get remaining images that weren't deleted
+      let remainingImages = [];
+      if (req.body.remainingImages) {
+        try {
+          remainingImages = JSON.parse(req.body.remainingImages);
+          if (!Array.isArray(remainingImages)) {
+            throw new Error('remainingImages must be an array');
+          }
+        } catch (err) {
+          console.error('Error parsing remainingImages:', err);
+          return res.status(400).json({ 
+            success: false,
+            message: 'Invalid remainingImages format'
+          });
+        }
+      }
+
+      // Combine new and remaining images
+      updateData.images = [...uploadResults, ...remainingImages];
+    }
+
+    // Remove fields that shouldn't be updated
+    delete updateData.shopitemid;
+    delete updateData.remainingImages;
+
+    // Validate update data
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields provided for update'
+      });
+    }
+
+    // Perform the update
+    const updatedProduct = await ShopProductModel.update(shopitemid, updateData);
+
+    if (!updatedProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    // Successful response
+    res.status(200).json({
+      success: true,
+      message: 'Product updated successfully',
+      product: updatedProduct
+    });
+
+  } catch (err) {
+    console.error('Update product error:', err);
+    res.status(500).json({
+      success: false,
+      message: err.message || 'Internal server error during update'
+    });
+
     console.error('Error fetching shop product by id:', error);
     res.status(500).json({ error: 'Internal server error', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
