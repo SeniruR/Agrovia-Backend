@@ -79,18 +79,7 @@ exports.createShopProduct = async (req, res) => {
       });
     }
 
-    // Prepare data with safe defaults and handle optional/nullable fields
-    // Ensure minimum_quantity_bulk is stored as null if blank/empty/invalid
-    let minimum_quantity_bulk = req.body.minimum_quantity_bulk;
-    if (minimum_quantity_bulk === '' || minimum_quantity_bulk === undefined || minimum_quantity_bulk === null) {
-      minimum_quantity_bulk = null;
-    } else if (!isNaN(minimum_quantity_bulk)) {
-      minimum_quantity_bulk = Number(minimum_quantity_bulk);
-      if (isNaN(minimum_quantity_bulk)) minimum_quantity_bulk = null;
-    } else {
-      minimum_quantity_bulk = null;
-    }
-
+    // Prepare data with safe defaults
     const productData = {
       shop_name: shop_name || null,
       owner_name: owner_name || null,
@@ -107,7 +96,7 @@ exports.createShopProduct = async (req, res) => {
       unit: unit || null,
       available_quantity: available_quantity || 0,
       product_description: product_description || null,
-      minimum_quantity_bulk, // ensure correct DB storage
+      
       usage_history: usage_history || null,
       organic_certified: organic_certified === 'true' || organic_certified === true,
       terms_accepted: terms_accepted === 'true' || terms_accepted === true,
@@ -137,12 +126,54 @@ exports.createShopProduct = async (req, res) => {
 exports.getAllShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAll();
-    const formattedProducts = products.map(product => ({
-      ...product,
-      organic_certified: Boolean(product.organic_certified),
-      terms_accepted: Boolean(product.terms_accepted),
-      images: product.images ? JSON.parse(product.images) : []
-    }));
+
+    const formattedProducts = products.map(product => {
+      // Handle Boolean fields
+      const organic_certified = Boolean(product.organic_certified);
+      const terms_accepted = Boolean(product.terms_accepted);
+
+      let images = [];
+
+      // Case 1: If image is a Buffer (single image in BLOB column)
+      if (Buffer.isBuffer(product.images)) {
+        const base64Image = product.images.toString('base64');
+        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
+      }
+
+      // Case 2: If image is stored as a JSON string
+      else if (typeof product.images === 'string') {
+        if (typeof product.images === 'string') {
+  try {
+    const parsed = JSON.parse(product.images);
+    if (Array.isArray(parsed)) {
+      images = parsed.map(img => {
+        if (img.buffer && img.mimetype) {
+          return `data:${img.mimetype};base64,${img.buffer}`;
+        }
+        return img;
+      });
+    } else {
+      images = [parsed];
+    }
+  } catch (err) {
+    images = [product.images]; // fallback if not valid JSON
+  }
+}
+}
+
+if (Buffer.isBuffer(product.images)) {
+  const base64Image = product.images.toString('base64');
+  images = [`data:image/jpeg;base64,${base64Image}`];
+}
+
+      return {
+        ...product,
+        organic_certified,
+        terms_accepted,
+        images
+      };
+    });
+
     res.status(200).json(formattedProducts);
   } catch (error) {
     console.error('Error fetching shop products:', error);
@@ -153,44 +184,67 @@ exports.getAllShopProducts = async (req, res) => {
   }
 };
 
-// Delete a shop product by shopitemid
-exports.deleteShopProduct = async (req, res) => {
-  try {
-    const { shopitemid } = req.params;
-    if (!shopitemid) {
-      return res.status(400).json({ error: 'Missing shopitemid parameter' });
+/*const getShopProductById = (req, res) => {
+  const { id } = req.params;
+  const sql = 'SELECT * FROM shop_products WHERE id = ?';
+  db.query(sql, [id], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error fetching product', error: err });
     }
-    const result = await ShopProductModel.deleteById(shopitemid);
-    if (result.success) {
-      return res.status(200).json({ message: 'Shop product deleted successfully', shopitemid });
-    } else {
-      return res.status(404).json({ error: 'Shop product not found', shopitemid });
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'Product not found' });
     }
-  } catch (error) {
-    console.error('Error deleting shop product:', error);
-    res.status(500).json({ error: 'Internal server error', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
-  }
+    res.json(results[0]);
+  });
 };
+*/
 
-// Get a single shop product by shopitemid
 exports.getShopProductById = async (req, res) => {
   try {
-    // Accept shopitemid from either params or query for compatibility
-    const shopitemid = req.params.shopitemid || req.query.shopitemid;
-    if (!shopitemid) {
-      return res.status(400).json({ error: 'Missing shopitemid parameter' });
-    }
-    const product = await ShopProductModel.findById(shopitemid);
-    if (product) {
-      product.organic_certified = Boolean(product.organic_certified);
-      product.terms_accepted = Boolean(product.terms_accepted);
-      product.images = product.images ? JSON.parse(product.images) : [];
-      return res.status(200).json(product);
-    } else {
-      return res.status(404).json({ error: 'Shop product not found', shopitemid });
-    }
-  } catch (error) {
+    const product = await ShopProductModel.findById(req.params.shopitemid);
 
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      product: {
+        id: product.id,
+        // Include only the ID or minimal essential fields
+        // Add other minimal fields if absolutely necessary
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch product'
+    });
+  }
+};
+exports.deleteShopProduct = async (req, res) => {
+  try {
+    const result = await ShopProductModel.deleteById(req.params.shopitemid);
+
+    if (!result.success) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Product deleted successfully',
+      affectedRows: result.affectedRows
+    });
+
+  } catch (error) {
     console.error('Error deleting product:', error);
     res.status(500).json({
       success: false,
@@ -291,8 +345,5 @@ exports.updateProduct = async (req, res) => {
       success: false,
       message: err.message || 'Internal server error during update'
     });
-
-    console.error('Error fetching shop product by id:', error);
-    res.status(500).json({ error: 'Internal server error', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 };
