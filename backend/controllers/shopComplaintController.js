@@ -1,6 +1,5 @@
-
 const ShopComplaint = require('../models/ShopComplaint');
-const ShopComplaintAttachment = require('../models/ShopComplaintAttachment');
+// ShopComplaintAttachment import removed (deprecated)
 const path = require('path');
 
 // Create a new shop complaint (with multiple BLOB attachments)
@@ -57,14 +56,13 @@ exports.getAllComplaints = async (req, res, next) => {
   }
 };
 
-// Get a single complaint by ID (with attachment metadata)
+// Get a single complaint by ID (with image data)
 exports.getComplaintById = async (req, res, next) => {
   try {
     const complaint = await ShopComplaint.findById(req.params.id);
     if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
-    // Get attachment metadata
-    const attachments = await ShopComplaintAttachment.findByComplaintId(req.params.id);
-    res.json({ ...complaint, attachments });
+    // No need to fetch attachments separately; image is included in complaint
+    res.json(complaint);
   } catch (error) {
     next(error);
   }

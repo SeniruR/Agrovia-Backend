@@ -52,10 +52,29 @@ class ShopComplaint {
     try {
       const [rows] = await pool.execute(query);
       // Parse attachments JSON for each row
-      return rows.map(row => ({
-        ...row,
-        attachments: row.attachments ? JSON.parse(row.attachments) : [],
-      }));
+      return rows.map(row => {
+        let parsed = [];
+        if (row.attachments) {
+          try { parsed = JSON.parse(row.attachments); } catch { parsed = []; }
+        }
+        // If only one attachment, return as string under 'image'
+        if (Array.isArray(parsed) && parsed.length === 1) {
+          return {
+            ...row,
+            image: parsed[0],
+          };
+        } else if (Array.isArray(parsed) && parsed.length > 1) {
+          return {
+            ...row,
+            images: parsed,
+          };
+        } else {
+          return {
+            ...row,
+            image: null,
+          };
+        }
+      });
     } catch (error) {
       throw error;
     }
@@ -67,10 +86,27 @@ class ShopComplaint {
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;
-      return {
-        ...rows[0],
-        attachments: rows[0].attachments ? JSON.parse(rows[0].attachments) : [],
-      };
+      let parsed = [];
+      if (rows[0].attachments) {
+        try { parsed = JSON.parse(rows[0].attachments); } catch { parsed = []; }
+      }
+      // If only one attachment, return as string under 'image'
+      if (Array.isArray(parsed) && parsed.length === 1) {
+        return {
+          ...rows[0],
+          image: parsed[0],
+        };
+      } else if (Array.isArray(parsed) && parsed.length > 1) {
+        return {
+          ...rows[0],
+          images: parsed,
+        };
+      } else {
+        return {
+          ...rows[0],
+          image: null,
+        };
+      }
     } catch (error) {
       throw error;
     }

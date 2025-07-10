@@ -56,10 +56,17 @@ class TransportComplaint {
     try {
       const [rows] = await pool.execute(query);
       // Parse attachments JSON for each row
-      return rows.map(row => ({
-        ...row,
-        attachments: row.attachments ? JSON.parse(row.attachments) : [],
-      }));
+      return rows.map(row => {
+        let parsed = [];
+        if (row.attachments) {
+          try { parsed = JSON.parse(row.attachments); } catch { parsed = []; }
+        }
+        // If only one attachment, return as string
+        return {
+          ...row,
+          attachments: Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed,
+        };
+      });
     } catch (error) {
       throw error;
     }
@@ -71,9 +78,13 @@ class TransportComplaint {
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;
+      let parsed = [];
+      if (rows[0].attachments) {
+        try { parsed = JSON.parse(rows[0].attachments); } catch { parsed = []; }
+      }
       return {
         ...rows[0],
-        attachments: rows[0].attachments ? JSON.parse(rows[0].attachments) : [],
+        attachments: Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed,
       };
     } catch (error) {
       throw error;
