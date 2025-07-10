@@ -58,6 +58,7 @@ const ShopProductModel = {
     };
   },
 
+
     update: async (shopitemid, updateData) => {
   try {
     // Convert updateData to an array of values in the correct order
@@ -123,6 +124,51 @@ const ShopProductModel = {
     console.error("Update error:", error);
     return { success: false, message: "Database update failed" };
   }
+=======
+   update: async (id, updateData) => {
+  delete updateData.shopitemid;
+
+  const validFields = [
+    'shop_name', 'owner_name', 'phone_no', 'shop_address', 'city',
+    'product_type', 'product_name', 'brand', 'category', 'season',
+    'price', 'unit', 'available_quantity', 'product_description',
+    'usage_history', 'organic_certified', 'images'
+  ];
+
+  const filteredUpdate = {};
+  for (const key in updateData) {
+    if (validFields.includes(key)) {
+      filteredUpdate[key] = updateData[key];
+    }
+  }
+
+  if (Object.keys(filteredUpdate).length === 0) {
+    throw new Error('No valid fields to update');
+  }
+
+  const fields = Object.keys(filteredUpdate);
+  const values = Object.values(filteredUpdate);
+
+  // Create SQL SET clause like: "shop_name = ?, owner_name = ? ..."
+  const setClause = fields.map(field => `${field} = ?`).join(', ');
+
+  const [result] = await pool.execute(
+    `UPDATE shop_products SET ${setClause} WHERE shopitemid = ?`,
+    [...values, id]
+  );
+
+  if (result.affectedRows === 0) {
+    throw new Error('Product not found');
+  }
+
+  // Return updated row
+  const [rows] = await pool.execute(
+    'SELECT * FROM shop_products WHERE shopitemid = ?',
+    [id]
+  );
+
+  return rows[0];
+
 }
 };
 

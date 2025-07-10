@@ -1,19 +1,19 @@
 const { pool } = require('../config/database');
 
-class ShopComplaint {
-  // Create a new shop complaint
+class CropComplaint {
+  // Create a new crop complaint
   static async create(complaint) {
     const {
       title,
       description,
       submittedBy,
       priority,
-      shopName,
-      location,
+      cropType,
+      farmer,
       category,
       orderNumber,
-      purchaseDate,
-      attachments
+      status = 'not consider',
+      attachments = null // images as BLOB
     } = complaint;
 
     // Ensure attachments is always a JSON stringified array
@@ -22,8 +22,8 @@ class ShopComplaint {
     else if (attachments) attachmentsStr = JSON.stringify([attachments]);
 
     const query = `
-      INSERT INTO shop_complaints
-        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date, attachments, submitted_at)
+      INSERT INTO crop_complaints
+        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, status, attachments, submitted_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
@@ -32,11 +32,11 @@ class ShopComplaint {
         description ?? null,
         submittedBy ?? null,
         priority ?? null,
-        shopName ?? null,
-        location ?? null,
+        cropType ?? null,
+        farmer ?? null,
         category ?? null,
         orderNumber ?? null,
-        purchaseDate ? purchaseDate : null,
+        status ?? 'not consider',
         attachmentsStr,
         new Date() // submitted_at as current timestamp
       ]);
@@ -48,7 +48,7 @@ class ShopComplaint {
 
   // Get all complaints
   static async findAll() {
-    const query = 'SELECT * FROM shop_complaints ORDER BY submitted_at DESC';
+    const query = 'SELECT * FROM crop_complaints ORDER BY submitted_at DESC';
     try {
       const [rows] = await pool.execute(query);
       // Parse attachments JSON for each row
@@ -63,7 +63,7 @@ class ShopComplaint {
 
   // Get complaint by ID
   static async findById(id) {
-    const query = 'SELECT * FROM shop_complaints WHERE id = ?';
+    const query = 'SELECT * FROM crop_complaints WHERE id = ?';
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;
@@ -92,7 +92,7 @@ class ShopComplaint {
         values.push(data[key]);
       }
     }
-    const query = `UPDATE shop_complaints SET ${fields.join(', ')} WHERE id = ?`;
+    const query = `UPDATE crop_complaints SET ${fields.join(', ')} WHERE id = ?`;
     values.push(id);
     try {
       const [result] = await pool.execute(query, values);
@@ -104,7 +104,7 @@ class ShopComplaint {
 
   // Delete complaint
   static async delete(id) {
-    const query = 'DELETE FROM shop_complaints WHERE id = ?';
+    const query = 'DELETE FROM crop_complaints WHERE id = ?';
     try {
       const [result] = await pool.execute(query, [id]);
       return result;
@@ -114,4 +114,4 @@ class ShopComplaint {
   }
 }
 
-module.exports = ShopComplaint;
+module.exports = CropComplaint;

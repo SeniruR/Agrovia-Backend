@@ -17,37 +17,49 @@ const verifyToken = (token) => {
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Support both 'Authorization' and 'authorization' headers, and allow token in query for dev
+    let token = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
+    } else if (req.headers['x-access-token']) {
+      token = req.headers['x-access-token'];
+    }
+
+    if (!token) {
       return res.status(401).json({
         success: false,
         message: 'Access token is required'
       });
     }
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    
     try {
       const decoded = verifyToken(token);
-      
       // Get user from database
       const user = await User.findById(decoded.userId);
-      
       if (!user) {
         return res.status(401).json({
           success: false,
           message: 'Invalid token - user not found'
         });
       }
-
       if (!user.is_active) {
         return res.status(401).json({
           success: false,
           message: 'Account is deactivated'
         });
       }
-
-      // Add user to request object
+      // Add user to request object with role mapping
+      const userTypeMap = {
+        '1': 'farmer',
+        '2': 'buyer',
+        '3': 'shop_owner',
+        '4': 'transporter',
+        '5': 'admin',
+        '6': 'committee_member'
+      };
+      user.role = userTypeMap[user.user_type?.toString()] || 'unknown';
       req.user = user;
       next();
     } catch (tokenError) {
@@ -66,7 +78,7 @@ const authenticate = async (req, res, next) => {
 };
 
 // Role-based authorization middleware
-const authorize = (...allowedRoles) => {
+const authorize = (allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -75,7 +87,10 @@ const authorize = (...allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Ensure allowedRoles is an array
+    const rolesArray = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+    
+    if (!rolesArray.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Insufficient permissions'

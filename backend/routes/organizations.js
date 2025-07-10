@@ -16,6 +16,11 @@ router.post(
 );
 
 // Public: Search organizations by name
+
+// Get organization info by contact person userId
+router.get('/by-contact-person/:userId', organizationController.getOrganizationByContactPerson);
+
 router.get('/search', organizationController.searchOrganizations);
+router.get('/:id', organizationController.getOrganizationById);
 
 module.exports = router;

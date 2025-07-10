@@ -21,7 +21,7 @@ router.get('/', shopComplaintController.getAllComplaints);
 router.get('/:id', shopComplaintController.getComplaintById);
 
 // Public: Download a single attachment by attachment ID
-router.get('/attachment/:attachmentId', shopComplaintController.downloadAttachment);
+// router.get('/attachment/:attachmentId', shopComplaintController.downloadAttachment);
 
 // Public: Update a complaint
 router.put('/:id', shopComplaintController.updateComplaint);

@@ -11,6 +11,17 @@ class Organization {
       throw error;
     }
   }
+
+  // Find organization by contact person user ID
+  static async findByContactPersonId(userId) {
+    const query = `SELECT id, org_name, org_area, org_description FROM organizations WHERE org_contactperson_id = ? LIMIT 1`;
+    try {
+      const [rows] = await pool.execute(query, [userId]);
+      return rows[0];
+    } catch (error) {
+      throw error;
+    }
+  }
   // Create a new organization (new fields)
   static async create(org) {
     // Ensure all fields are never undefined (use null for missing/optional fields)
