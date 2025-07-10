@@ -252,3 +252,114 @@ exports.deleteShopProduct = async (req, res) => {
     });
   }
 };
+
+
+exports.updateProduct = async (req, res) => {
+  try {
+    const shopitemid = req.params.shopitemid;
+    const body = req.body;
+    const files = req.files || [];
+
+    // Debug: Log received files
+    console.log('Received files:', files);
+
+    // 1. Get existing product
+    const existingProduct = await ShopProductModel.findById(shopitemid);
+    if (!existingProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    // 2. Initialize updateData with existing values
+    const updateData = { ...existingProduct };
+
+    // 3. Handle image updates
+    let keptImages = existingProduct.images || [];
+    
+    if (body.keptImages) {
+      try {
+        keptImages = typeof body.keptImages === 'string' 
+          ? JSON.parse(body.keptImages) 
+          : body.keptImages;
+      } catch (e) {
+        console.error('Error parsing keptImages:', e);
+        keptImages = existingProduct.images || [];
+      }
+    }
+
+    // Process new images
+    const newImages = files
+      .filter(f => {
+        console.log('Processing file:', f);
+        return f.fieldname === 'newImages' && f.path;
+      })
+      .map(f => {
+        console.log('File path:', f.path);
+        return f.path;
+      });
+
+    console.log('New images to add:', newImages);
+    console.log('Existing kept images:', keptImages);
+
+    // Always update images array if there are new images or keptImages was provided
+    if (body.keptImages !== undefined || newImages.length > 0) {
+      updateData.images = [
+        ...keptImages.filter(img => typeof img === 'string' && img.trim() !== ''),
+        ...newImages
+      ].filter(Boolean);
+    }
+
+    console.log('Final images array:', updateData.images);
+
+    // 4. Handle other field updates
+    const fieldTypes = {
+      organic_certified: 'boolean',
+      price: 'number',
+      available_quantity: 'number'
+    };
+
+    Object.keys(body).forEach(key => {
+      if (key !== 'keptImages' && body[key] !== undefined && body[key] !== null) {
+        switch (fieldTypes[key]) {
+          case 'boolean':
+            updateData[key] = body[key] ? 1 : 0;
+            break;
+          case 'number':
+            updateData[key] = Number(body[key]);
+            break;
+          default:
+            updateData[key] = body[key];
+        }
+      }
+    });
+
+    // 5. Perform the update
+    console.log('Final update data:', updateData);
+    const updateResult = await ShopProductModel.update(shopitemid, updateData);
+    
+    if (!updateResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: updateResult.message || 'Failed to update product'
+      });
+    }
+
+    // 6. Return updated product
+    const updatedProduct = await ShopProductModel.findById(shopitemid);
+
+    res.status(200).json({
+      success: true,
+      data: updatedProduct,
+      message: 'Product updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Internal server error'
+    });
+  }
+};

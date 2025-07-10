@@ -57,6 +57,73 @@ const ShopProductModel = {
       affectedRows: result.affectedRows
     };
   },
+
+    update: async (shopitemid, updateData) => {
+  try {
+    // Convert updateData to an array of values in the correct order
+    const allowedFields = [
+      'images',
+      'shop_name',
+      'owner_name',
+      'phone_no',
+      'shop_address',
+      'city',
+      'product_name',
+      'brand',
+      'category',
+      'season',
+      'price',
+      'unit',
+      'available_quantity',
+      'product_description',
+      'usage_history',
+      'product_type',
+      'organic_certified'
+    ];
+
+    // Filter and prepare values
+    const values = [];
+    const setClauses = [];
+    
+    allowedFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        setClauses.push(`${field} = ?`);
+        
+        // Ensure proper type conversion for MySQL
+        if (field === 'organic_certified') {
+          values.push(updateData[field] ? 1 : 0);
+        } else if (field === 'price' || field === 'available_quantity') {
+          values.push(Number(updateData[field]));
+        } else {
+          values.push(updateData[field]);
+        }
+      }
+    });
+
+    if (setClauses.length === 0) {
+      return { success: false, message: "No valid fields to update" };
+    }
+
+    // Add shopitemid to values for WHERE clause
+    values.push(shopitemid);
+
+    const [result] = await pool.execute(
+      `UPDATE shop_products SET ${setClauses.join(', ')} WHERE shopitemid = ?`,
+      values
+    );
+
+    return {
+      success: result.affectedRows > 0,
+      affectedRows: result.affectedRows,
+      message: result.affectedRows > 0 
+        ? "Product updated successfully" 
+        : "No product found with that ID"
+    };
+  } catch (error) {
+    console.error("Update error:", error);
+    return { success: false, message: "Database update failed" };
+  }
+}
 };
 
 module.exports = ShopProductModel;
