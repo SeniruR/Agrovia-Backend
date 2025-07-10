@@ -89,6 +89,13 @@ router.get('/profile-full',
   getProfileWithFarmerDetails
 );
 
+// Update full profile (user + farmer details)
+router.put('/profile-full',
+  authenticate,
+  upload.single('profileImage'),
+  require('../controllers/authController').updateProfileWithFarmerDetails
+);
+
 // Admin only routes
 router.get('/users',
   authenticate,

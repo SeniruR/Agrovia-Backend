@@ -1,3 +1,71 @@
+// Update user profile and farmer details
+const updateProfileWithFarmerDetails = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const pool = require('../config/database').pool;
+
+    // Parse form data (for file upload support)
+    let data = req.body;
+    let profileImagePath = null;
+    if (req.file) {
+      profileImagePath = `/uploads/${req.file.filename}`;
+    }
+
+    // Build user update fields
+    const userFields = {
+      full_name: data.fullName,
+      email: data.email,
+      phone_number: data.phoneNumber,
+      district: data.district,
+      nic: data.nic,
+      address: data.address,
+    };
+    if (profileImagePath) userFields.profile_image = profileImagePath;
+
+    // Build farmer_details update fields
+    const farmerFields = {
+      land_size: data.landSize,
+      birth_date: data.birthDate,
+      description: data.description,
+      division_gramasewa_number: data.divisionGramasewaNumber,
+      organization_committee_number: data.organizationCommitteeNumber,
+      farming_experience: data.farmingExperience,
+      cultivated_crops: data.primaryCrops,
+      secondary_crops: data.secondaryCrops,
+      farming_methods: data.farmingMethods,
+      irrigation_system: data.irrigationSystem,
+      soil_type: data.soilType,
+      education: data.educationLevel,
+      annual_income: data.annualIncome,
+      farming_certifications: data.farmingCertifications,
+    };
+
+    // Update users table
+    const userSet = Object.keys(userFields).map(f => `${f} = ?`).join(', ');
+    const userVals = Object.values(userFields);
+    await pool.query(`UPDATE users SET ${userSet} WHERE id = ?`, [...userVals, userId]);
+
+    // Check if farmer_details exists
+    const [rows] = await pool.query('SELECT user_id FROM farmer_details WHERE user_id = ?', [userId]);
+    if (rows.length > 0) {
+      // Update
+      const farmerSet = Object.keys(farmerFields).map(f => `${f} = ?`).join(', ');
+      const farmerVals = Object.values(farmerFields);
+      await pool.query(`UPDATE farmer_details SET ${farmerSet} WHERE user_id = ?`, [...farmerVals, userId]);
+    } else {
+      // Insert
+      await pool.query(
+        `INSERT INTO farmer_details (user_id, ${Object.keys(farmerFields).join(', ')}) VALUES (?, ${Object.keys(farmerFields).map(() => '?').join(', ')})`,
+        [userId, ...Object.values(farmerFields)]
+      );
+    }
+
+    return res.json({ success: true, message: 'Profile updated successfully.' });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update profile', error: err.message });
+  }
+};
 // Register shop owner
 const ShopOwner = require('../models/ShopOwner');
 const registerShopOwner = async (req, res, next) => {
@@ -429,5 +497,6 @@ module.exports = {
   getAllUsers,
   registerBuyer,
   registerShopOwner,
-  getProfileWithFarmerDetails
+  getProfileWithFarmerDetails,
+  updateProfileWithFarmerDetails
 };
