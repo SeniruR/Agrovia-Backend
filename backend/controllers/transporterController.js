@@ -66,6 +66,17 @@ const registerTransporter = async (req, res, next) => {
       additional_info
     });
 
+    // After user is created, insert into disable_accounts with case_id = 3 (pending review)
+    try {
+      await require('../config/database').pool.execute(
+        'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
+        [userId, 3]
+      );
+    } catch (disableErr) {
+      console.error('Failed to insert into disable_accounts for transporter:', disableErr);
+      // Not fatal for registration, so do not throw
+    }
+
     res.status(201).json({ success: true, message: 'Transporter registered successfully', data: { user: { ...userData, user_id: userId } } });
   } catch (error) {
     next(error);
