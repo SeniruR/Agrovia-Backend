@@ -12,7 +12,6 @@ class CropComplaint {
       farmer,
       category,
       orderNumber,
-      status = 'not consider',
       attachments = null // images as BLOB
     } = complaint;
 
@@ -23,8 +22,8 @@ class CropComplaint {
 
     const query = `
       INSERT INTO crop_complaints
-        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, status, attachments, submitted_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, attachments, submitted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -36,7 +35,6 @@ class CropComplaint {
         farmer ?? null,
         category ?? null,
         orderNumber ?? null,
-        status ?? 'not consider',
         attachmentsStr,
         new Date() // submitted_at as current timestamp
       ]);
