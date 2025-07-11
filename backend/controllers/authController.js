@@ -1,3 +1,71 @@
+// Update user profile and farmer details
+const updateProfileWithFarmerDetails = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const pool = require('../config/database').pool;
+
+    // Parse form data (for file upload support)
+    let data = req.body;
+    let profileImagePath = null;
+    if (req.file) {
+      profileImagePath = `/uploads/${req.file.filename}`;
+    }
+
+    // Build user update fields
+    const userFields = {
+      full_name: data.fullName,
+      email: data.email,
+      phone_number: data.phoneNumber,
+      district: data.district,
+      nic: data.nic,
+      address: data.address,
+    };
+    if (profileImagePath) userFields.profile_image = profileImagePath;
+
+    // Build farmer_details update fields
+    const farmerFields = {
+      land_size: data.landSize,
+      birth_date: data.birthDate,
+      description: data.description,
+      division_gramasewa_number: data.divisionGramasewaNumber,
+      organization_committee_number: data.organizationCommitteeNumber,
+      farming_experience: data.farmingExperience,
+      cultivated_crops: data.primaryCrops,
+      secondary_crops: data.secondaryCrops,
+      farming_methods: data.farmingMethods,
+      irrigation_system: data.irrigationSystem,
+      soil_type: data.soilType,
+      education: data.educationLevel,
+      annual_income: data.annualIncome,
+      farming_certifications: data.farmingCertifications,
+    };
+
+    // Update users table
+    const userSet = Object.keys(userFields).map(f => `${f} = ?`).join(', ');
+    const userVals = Object.values(userFields);
+    await pool.query(`UPDATE users SET ${userSet} WHERE id = ?`, [...userVals, userId]);
+
+    // Check if farmer_details exists
+    const [rows] = await pool.query('SELECT user_id FROM farmer_details WHERE user_id = ?', [userId]);
+    if (rows.length > 0) {
+      // Update
+      const farmerSet = Object.keys(farmerFields).map(f => `${f} = ?`).join(', ');
+      const farmerVals = Object.values(farmerFields);
+      await pool.query(`UPDATE farmer_details SET ${farmerSet} WHERE user_id = ?`, [...farmerVals, userId]);
+    } else {
+      // Insert
+      await pool.query(
+        `INSERT INTO farmer_details (user_id, ${Object.keys(farmerFields).join(', ')}) VALUES (?, ${Object.keys(farmerFields).map(() => '?').join(', ')})`,
+        [userId, ...Object.values(farmerFields)]
+      );
+    }
+
+    return res.json({ success: true, message: 'Profile updated successfully.' });
+  } catch (err) {
+    console.error('Profile update error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update profile', error: err.message });
+  }
+};
 // Register shop owner
 const ShopOwner = require('../models/ShopOwner');
 const registerShopOwner = async (req, res, next) => {
@@ -142,6 +210,7 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const { generateToken } = require('../middleware/auth');
 const { hashPassword, comparePassword, sanitizeUser, formatResponse } = require('../utils/helpers');
+const FarmerDetails = require('../models/FarmerDetails');
 
 // Register farmer
 const registerFarmer = async (req, res, next) => {
@@ -212,9 +281,22 @@ const registerFarmer = async (req, res, next) => {
     };
 
     const result = await User.create(userData);
+    // Support multiple possible return keys for user ID
+    const userId = result.user_id || result.insertId || result.id;
+
+    // After user is created, insert into disable_accounts with case_id = 2
+    try {
+      await require('../config/database').pool.execute(
+        'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
+        [userId, 2]
+      );
+    } catch (disableErr) {
+      console.error('Failed to insert into disable_accounts:', disableErr);
+      // Not fatal for registration, so do not throw
+    }
 
     // Get created user
-    const newUser = await User.findById(result.insertId);
+    const newUser = await User.findById(userId);
     const sanitizedUser = sanitizeUser(newUser);
 
     // Generate token
@@ -332,10 +414,29 @@ const login = async (req, res, next) => {
       );
     }
 
+
     // Check if user is active
     if (!user.is_active) {
-      return res.status(401).json(
-        formatResponse(false, 'Account is deactivated')
+      // Optionally, fetch disable reason from disable_accounts/disable_account_cases
+      let disableReason = null;
+      try {
+        const [rows] = await require('../config/database').pool.execute(
+          `SELECT d.case_id, c.case_name, d.created_at
+           FROM disable_accounts d
+           JOIN disable_account_cases c ON d.case_id = c.id
+           WHERE d.user_id = ?
+           ORDER BY d.created_at DESC
+           LIMIT 1`,
+          [user.id]
+        );
+        if (rows.length > 0) {
+          disableReason = rows[0].case_name;
+        }
+      } catch (err) {
+        // ignore DB error, fallback to generic
+      }
+      return res.status(403).json(
+        formatResponse(false, disableReason || 'Account is deactivated', { user })
       );
     }
 
@@ -380,6 +481,29 @@ const getProfile = async (req, res, next) => {
   }
 };
 
+// Get current user profile with farmer details
+const getProfileWithFarmerDetails = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    let farmerDetails = null;
+    if (user.user_type === 1) { // 1 = farmer
+      farmerDetails = await FarmerDetails.findByUserId(user.id);
+    }
+    res.json({
+      success: true,
+      user: {
+        ...sanitizeUser(user),
+        farmer_details: farmerDetails
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Get all users (admin only)
 const getAllUsers = async (req, res, next) => {
   try {
@@ -404,5 +528,7 @@ module.exports = {
   getProfile,
   getAllUsers,
   registerBuyer,
-  registerShopOwner
+  registerShopOwner,
+  getProfileWithFarmerDetails,
+  updateProfileWithFarmerDetails
 };

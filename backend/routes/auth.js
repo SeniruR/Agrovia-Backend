@@ -1,4 +1,3 @@
-
 const express = require('express');
 const upload = require('../config/upload');
 const { authLimiter } = require('../middleware/rateLimiter');
@@ -11,8 +10,10 @@ const {
   login,
   getProfile,
   getAllUsers,
-  registerShopOwner
+  registerShopOwner,
+  getProfileWithFarmerDetails
 } = require('../controllers/authController');
+const { registerTransporter } = require('../controllers/transporterController');
 
 const router = express.Router();
 
@@ -69,10 +70,30 @@ router.post('/login',
   login
 );
 
+// Transporter registration: must handle file upload before validation
+router.post('/register/transporter',
+  authLimiter,
+  upload.single('profile_image'),
+  registerTransporter
+);
+
 // Protected routes
 router.get('/profile',
   authenticate,
   getProfile
+);
+
+// New: Full profile with farmer details
+router.get('/profile-full',
+  authenticate,
+  getProfileWithFarmerDetails
+);
+
+// Update full profile (user + farmer details)
+router.put('/profile-full',
+  authenticate,
+  upload.single('profileImage'),
+  require('../controllers/authController').updateProfileWithFarmerDetails
 );
 
 // Admin only routes
@@ -81,5 +102,33 @@ router.get('/users',
   authorize('admin'),
   getAllUsers
 );
+
+// GET /api/v1/auth/disable-reason/:userId
+router.get('/disable-reason/:userId', async (req, res) => {
+    const userId = req.params.userId;
+    try {
+        // Get the latest disable record for this user
+        const [disableRows] = await pool.execute(
+            `SELECT d.case_id, c.case_name, d.created_at
+             FROM disable_accounts d
+             JOIN disable_account_cases c ON d.case_id = c.id
+             WHERE d.user_id = ?
+             ORDER BY d.created_at DESC
+             LIMIT 1`,
+            [userId]
+        );
+        if (disableRows.length > 0) {
+            res.json({
+                case_id: disableRows[0].case_id,
+                case_name: disableRows[0].case_name,
+                created_at: disableRows[0].created_at
+            });
+        } else {
+            res.status(404).json({ message: 'No disable reason found for this user.' });
+        }
+    } catch (err) {
+        res.status(500).json({ message: 'Error fetching disable reason.' });
+    }
+});
 
 module.exports = router;
