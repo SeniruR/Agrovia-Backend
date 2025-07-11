@@ -18,9 +18,27 @@ exports.createComplaint = async (req, res, next) => {
     } = req.body;
 
     let attachments = req.body.attachments;
+    
     // Handle file uploads
     if (req.files && req.files.length > 0) {
-      attachments = req.files.map(file => file.filename);
+      console.log('Processing file uploads:', req.files.length, 'files');
+      console.log('File details:', req.files.map(f => ({name: f.originalname, size: f.size, mimetype: f.mimetype})));
+      
+      // Store the file directly as base64 string
+      if (req.files.length === 1) {
+        const fileBuffer = req.files[0].buffer;
+        attachments = fileBuffer.toString('base64');
+        console.log('Stored single image as base64 string, length:', attachments.length);
+        
+        // Quick validation of the base64 string
+        if (attachments.startsWith('[') || attachments.startsWith('{')) {
+          console.warn('Warning: Base64 string has unexpected format');
+        }
+      } else {
+        // Multiple files, store as JSON array of base64 strings
+        attachments = JSON.stringify(req.files.map(file => file.buffer.toString('base64')));
+        console.log('Stored multiple images as JSON array');
+      }
     }
 
     // Save complaint
@@ -61,9 +79,27 @@ exports.getComplaintById = async (req, res, next) => {
   try {
     const complaint = await ShopComplaint.findById(req.params.id);
     if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
-    // No need to fetch attachments separately; image is included in complaint
+    
+    // Debug info
+    console.log('Sending shop complaint:', complaint.id);
+    
+    // Validate image data if present
+    if (complaint.image) {
+      console.log('Image data type:', typeof complaint.image);
+      console.log('Image data length:', complaint.image.length);
+      // Check for common issues
+      if (typeof complaint.image === 'string') {
+        const firstChars = complaint.image.substring(0, 30);
+        console.log('Image data starts with:', firstChars);
+        if (firstChars.includes('[') || firstChars.includes('{')) {
+          console.log('Warning: Image data might be in an incorrect format');
+        }
+      }
+    }
+    
     res.json(complaint);
   } catch (error) {
+    console.error('Error in getComplaintById:', error);
     next(error);
   }
 };

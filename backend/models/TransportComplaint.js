@@ -14,7 +14,6 @@ class TransportComplaint {
       orderNumber,
       deliveryDate,
       trackingNumber,
-      status = 'not consider',
       attachments = null // new field for storing images as BLOB
     } = complaint;
 
@@ -25,8 +24,8 @@ class TransportComplaint {
 
     const query = `
       INSERT INTO transport_complaints
-        (title, description, submitted_by, priority, transport_company, location, category, order_number, delivery_date, tracking_number, status, attachments, submitted_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, priority, transport_company, location, category, order_number, delivery_date, tracking_number, attachments, submitted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -40,7 +39,6 @@ class TransportComplaint {
         orderNumber ?? null,
         deliveryDate ? deliveryDate : null,
         trackingNumber ?? null,
-        status ?? 'not consider',
         attachmentsStr,
         new Date() // submitted_at as current timestamp
       ]);

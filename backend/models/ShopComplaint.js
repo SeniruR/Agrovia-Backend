@@ -86,28 +86,57 @@ class ShopComplaint {
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;
-      let parsed = [];
+      
+      // Create result object with base data
+      let result = { ...rows[0] };
+      
+      // Debug the raw attachments data first
       if (rows[0].attachments) {
-        try { parsed = JSON.parse(rows[0].attachments); } catch { parsed = []; }
+        console.log('Raw attachments data type:', typeof rows[0].attachments);
+        if (Buffer.isBuffer(rows[0].attachments)) {
+          console.log('Attachments is a Buffer, length:', rows[0].attachments.length);
+        } else if (typeof rows[0].attachments === 'string') {
+          console.log('Attachments is a String, length:', rows[0].attachments.length);
+          console.log('First few characters:', rows[0].attachments.substring(0, 30));
+        }
       }
-      // If only one attachment, return as string under 'image'
-      if (Array.isArray(parsed) && parsed.length === 1) {
-        return {
-          ...rows[0],
-          image: parsed[0],
-        };
-      } else if (Array.isArray(parsed) && parsed.length > 1) {
-        return {
-          ...rows[0],
-          images: parsed,
-        };
-      } else {
-        return {
-          ...rows[0],
-          image: null,
-        };
+      
+      // Process attachments field if it exists
+      if (rows[0].attachments) {
+        try {
+          // First try to parse as JSON (for cases when it's stored as a JSON string)
+          const parsed = JSON.parse(rows[0].attachments); 
+          console.log('Successfully parsed attachments as JSON');
+          
+          // If we have one attachment, put it in the image field
+          if (Array.isArray(parsed) && parsed.length === 1) {
+            result.image = parsed[0];
+            console.log('Using single item from parsed JSON array');
+          } else if (Array.isArray(parsed) && parsed.length > 1) {
+            result.images = parsed;
+            console.log('Using multiple items from parsed JSON array');
+          }
+        } catch (e) {
+          // If JSON parsing fails, attachments might be a raw data string
+          console.log('JSON parsing failed:', e.message);
+          
+          // For shop complaints, the attachment might be stored directly as base64
+          if (typeof rows[0].attachments === 'string') {
+            // Clean the string (remove any wrapping quotes, etc.)
+            let cleanedData = rows[0].attachments.replace(/^["']+|["']+$/g, '');
+            result.image = cleanedData;
+            console.log('Using direct string data as image, length:', cleanedData.length);
+          } else if (Buffer.isBuffer(rows[0].attachments)) {
+            // It's a Buffer, convert to base64
+            result.image = rows[0].attachments.toString('base64');
+            console.log('Converted Buffer to base64 string, length:', result.image.length);
+          }
+        }
       }
+      
+      return result;
     } catch (error) {
+      console.error('Error in ShopComplaint.findById:', error);
       throw error;
     }
   }
