@@ -17,9 +17,11 @@ const registerOrganization = async (req, res, next) => {
     // File upload (memoryStorage: only buffer and originalname are available)
     let letterOfProofFile = null;
     let letterOfProofName = null;
+    let letterOfProofMime = null;
     if (req.file) {
       letterOfProofFile = req.file.buffer;
       letterOfProofName = req.file.originalname;
+      letterOfProofMime = req.file.mimetype;
     }
 
     // Validate required fields
@@ -42,9 +44,10 @@ const registerOrganization = async (req, res, next) => {
       gn_contactno: govijanasewaniladariContact,
       letter_of_proof: letterOfProofName, // store original filename for reference
       letter_of_proof_file: letterOfProofFile,
+      letter_of_proof_mime: letterOfProofMime,
       est: establishedDate,
       org_description: organizationDescription,
-      contactperson_id
+      org_contactperson_id: contactperson_id
     });
 
     res.status(201).json({ success: true, message: 'Organization registered successfully', id: result.insertId });
@@ -157,11 +160,51 @@ const deleteOrganization = async (req, res, next) => {
   }
 };
 
+// Get organization by contact person user ID
+const getOrganizationByContactPerson = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing userId parameter' });
+    }
+    const org = await Organization.findByContactPersonId(userId);
+    if (!org) {
+      return res.status(404).json({ message: 'Organization not found for this contact person' });
+    }
+    // Return in frontend-expected format, now including org_contactperson_id
+    res.json({
+      id: org.id,
+      name: org.org_name,
+      org_area: org.org_area,
+      org_description: org.org_description,
+      org_contactperson_id: org.org_contactperson_id
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get organization by ID
+const getOrganizationById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const org = await Organization.findById(id);
+    if (!org) {
+      return res.status(404).json({ message: 'Organization not found' });
+    }
+    res.json(org);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   registerOrganization,
   searchOrganizations,
   getAllOrganizations,
   getOrganizationByCommitteeNumber,
   updateOrganization,
-  deleteOrganization
+  deleteOrganization,
+  getOrganizationByContactPerson,
+  getOrganizationById
 };

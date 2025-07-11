@@ -95,6 +95,17 @@ const createTables = async (connection) => {
       )
     `);
 
+    // Disable accounts table (user_id FK to users)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS disable_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        case_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for better performance (MySQL compatible way)
     try {
       await connection.execute(`CREATE INDEX idx_users_email ON users(email)`);
@@ -129,6 +140,7 @@ const createTables = async (connection) => {
         contact_number VARCHAR(20) NOT NULL,
         email VARCHAR(255),
         images JSON,
+        minimum_quantity_bulk VARCHAR(100) NULL,
         status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

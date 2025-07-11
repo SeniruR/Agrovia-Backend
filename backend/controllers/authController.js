@@ -281,9 +281,22 @@ const registerFarmer = async (req, res, next) => {
     };
 
     const result = await User.create(userData);
+    // Support multiple possible return keys for user ID
+    const userId = result.user_id || result.insertId || result.id;
+
+    // After user is created, insert into disable_accounts with case_id = 2
+    try {
+      await require('../config/database').pool.execute(
+        'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
+        [userId, 2]
+      );
+    } catch (disableErr) {
+      console.error('Failed to insert into disable_accounts:', disableErr);
+      // Not fatal for registration, so do not throw
+    }
 
     // Get created user
-    const newUser = await User.findById(result.insertId);
+    const newUser = await User.findById(userId);
     const sanitizedUser = sanitizeUser(newUser);
 
     // Generate token
@@ -401,10 +414,29 @@ const login = async (req, res, next) => {
       );
     }
 
+
     // Check if user is active
     if (!user.is_active) {
-      return res.status(401).json(
-        formatResponse(false, 'Account is deactivated')
+      // Optionally, fetch disable reason from disable_accounts/disable_account_cases
+      let disableReason = null;
+      try {
+        const [rows] = await require('../config/database').pool.execute(
+          `SELECT d.case_id, c.case_name, d.created_at
+           FROM disable_accounts d
+           JOIN disable_account_cases c ON d.case_id = c.id
+           WHERE d.user_id = ?
+           ORDER BY d.created_at DESC
+           LIMIT 1`,
+          [user.id]
+        );
+        if (rows.length > 0) {
+          disableReason = rows[0].case_name;
+        }
+      } catch (err) {
+        // ignore DB error, fallback to generic
+      }
+      return res.status(403).json(
+        formatResponse(false, disableReason || 'Account is deactivated', { user })
       );
     }
 
