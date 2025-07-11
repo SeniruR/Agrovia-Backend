@@ -14,6 +14,7 @@ const {
   getProfileWithFarmerDetails
 } = require('../controllers/authController');
 const { registerTransporter } = require('../controllers/transporterController');
+const { registerModerator } = require('../controllers/moderatorController');
 
 const router = express.Router();
 
@@ -75,6 +76,13 @@ router.post('/register/transporter',
   authLimiter,
   upload.single('profile_image'),
   registerTransporter
+);
+
+// Moderator registration: must handle file upload before validation
+router.post('/register/moderator',
+  authLimiter,
+  upload.single('profile_image'),
+  registerModerator
 );
 
 // Protected routes

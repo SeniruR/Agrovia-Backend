@@ -14,6 +14,7 @@ const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 
 const organizationApprovalRoutes = require('./organizationApproval');
+// (undo) removed disableAccounts route registration
 const router = express.Router();
 
 // Health check endpoint
@@ -41,6 +42,7 @@ router.use('/shop-complaints', shopComplaintRoutes);
 router.use('/transporters', transporterRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
+// (undo) removed disableAccounts route registration
 
 
 module.exports = router;
