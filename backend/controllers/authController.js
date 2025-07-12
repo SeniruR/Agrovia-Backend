@@ -105,6 +105,12 @@ const registerShopOwner = async (req, res, next) => {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
+
+    // Handle images and license as BLOBs
+    const profileImageFile = req.files && req.files.profile_image ? req.files.profile_image[0] : null;
+    const shopImageFile = req.files && req.files.shop_image ? req.files.shop_image[0] : null;
+    const shopLicenseFile = req.files && req.files.shop_license ? req.files.shop_license[0] : null;
+
     // Create user
     const userData = {
       full_name,
@@ -114,7 +120,8 @@ const registerShopOwner = async (req, res, next) => {
       district,
       nic,
       address: address || null,
-      profile_image: req.file ? req.file.filename : null,
+      profile_image: profileImageFile ? profileImageFile.buffer : null,
+      profile_image_mime: profileImageFile ? profileImageFile.mimetype : null,
       user_type: 3 // 3 = shop owner
     };
     const result = await User.create(userData);
@@ -133,8 +140,10 @@ const registerShopOwner = async (req, res, next) => {
       operating_hours,
       opening_days,
       delivery_areas,
-      shop_license: req.files && req.files.shop_license ? req.files.shop_license[0].filename : null,
-      shop_image: req.files && req.files.shop_image ? req.files.shop_image[0].filename : null
+      shop_license: shopLicenseFile ? shopLicenseFile.buffer : null,
+      shop_license_mime: shopLicenseFile ? shopLicenseFile.mimetype : null,
+      shop_image: shopImageFile ? shopImageFile.buffer : null,
+      shop_image_mime: shopImageFile ? shopImageFile.mimetype : null
     });
 
     res.status(201).json({ success: true, message: 'Shop owner registered successfully' });
@@ -173,6 +182,17 @@ const registerBuyer = async (req, res, next) => {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
+    // Validate uploaded file is an image (extra safety)
+    let profile_image = null;
+    let profile_image_mime = null;
+    if (req.file) {
+      if (!req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ success: false, message: 'Profile image must be an image file.' });
+      }
+      profile_image = req.file.buffer;
+      profile_image_mime = req.file.mimetype;
+    }
+
     // Create user
     const userData = {
       full_name: name,
@@ -182,7 +202,8 @@ const registerBuyer = async (req, res, next) => {
       district,
       nic: nic_number,
       address: company_address || null,
-      profile_image: req.file ? req.file.filename : null,
+      profile_image,
+      profile_image_mime,
       user_type: 2 // 2 = buyer
     };
 
@@ -197,7 +218,8 @@ const registerBuyer = async (req, res, next) => {
       company_name,
       company_type,
       company_address,
-      profile_image: req.file ? req.file.filename : null,
+      profile_image,
+      profile_image_mime,
       payment_offer
     });
 

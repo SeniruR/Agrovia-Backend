@@ -8,21 +8,19 @@ class Buyer {
       company_name,
       company_type,
       company_address,
-      profile_image,
       payment_offer
     } = buyerData;
 
     const query = `
       INSERT INTO buyer_details (
-        user_id, company_name, company_type, company_address, profile_image, payment_offer
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        user_id, company_name, company_type, company_address, payment_offer
+      ) VALUES (?, ?, ?, ?, ?)
     `;
     const values = [
       user_id,
       company_name ?? null,
       company_type ?? null,
       company_address ?? null,
-      profile_image ?? null,
       payment_offer ?? null
     ];
     try {

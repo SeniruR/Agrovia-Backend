@@ -37,6 +37,17 @@ const registerTransporter = async (req, res, next) => {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
+    // Validate uploaded file is an image (extra safety)
+    let profile_image = null;
+    let profile_image_mime = null;
+    if (req.file) {
+      if (!req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ success: false, message: 'Profile image must be an image file.' });
+      }
+      profile_image = req.file.buffer;
+      profile_image_mime = req.file.mimetype;
+    }
+
     // Create user
     const userData = {
       full_name,
@@ -46,7 +57,8 @@ const registerTransporter = async (req, res, next) => {
       district,
       nic,
       address: address || null,
-      profile_image: req.file ? req.file.filename : null,
+      profile_image,
+      profile_image_mime,
       birth_date: birth_date || null,
       user_type: 4 // 4 = transporter
     };
