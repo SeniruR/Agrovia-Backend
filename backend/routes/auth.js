@@ -21,7 +21,7 @@ const router = express.Router();
 // Shop Owner registration: must handle file upload before validation
 router.post('/register/shop-owner',
   authLimiter,
-  upload.fields([
+  uploadMemory.fields([
     { name: 'profile_image', maxCount: 1 },
     { name: 'shop_license', maxCount: 1 },
     { name: 'shop_image', maxCount: 1 }
