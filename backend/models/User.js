@@ -32,9 +32,11 @@ class User {
         address, profile_image, profile_image_mime, user_type, is_active
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
+    // Set is_active=1 for buyers (user_type=2), 0 for others
+    const isActive = user_type === 2 ? 1 : 0;
     const userValues = [
       full_name, email, password_hash, phone_number, district, nic,
-      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, 0 // always inactive on create
+      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, isActive
     ];
 
     try {

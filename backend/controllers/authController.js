@@ -173,6 +173,17 @@ const registerBuyer = async (req, res, next) => {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
+    // Validate uploaded file is an image (extra safety)
+    let profile_image = null;
+    let profile_image_mime = null;
+    if (req.file) {
+      if (!req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ success: false, message: 'Profile image must be an image file.' });
+      }
+      profile_image = req.file.buffer;
+      profile_image_mime = req.file.mimetype;
+    }
+
     // Create user
     const userData = {
       full_name: name,
@@ -182,7 +193,8 @@ const registerBuyer = async (req, res, next) => {
       district,
       nic: nic_number,
       address: company_address || null,
-      profile_image: req.file ? req.file.filename : null,
+      profile_image,
+      profile_image_mime,
       user_type: 2 // 2 = buyer
     };
 
@@ -197,7 +209,8 @@ const registerBuyer = async (req, res, next) => {
       company_name,
       company_type,
       company_address,
-      profile_image: req.file ? req.file.filename : null,
+      profile_image,
+      profile_image_mime,
       payment_offer
     });
 

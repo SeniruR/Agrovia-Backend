@@ -1,5 +1,5 @@
 const express = require('express');
-const { upload, uploadMemory } = require('../config/upload');
+const { upload, uploadMemory, uploadProfileImage } = require('../config/upload');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { validate, registerFarmerSchema, registerCommitteeMemberSchema, registerBuyerSchema, loginSchema } = require('../middleware/validation');
 const { authenticate, authorize } = require('../middleware/auth');
@@ -51,9 +51,10 @@ router.post('/register/farmer',
 
 
 // Buyer registration: must handle file upload before validation
+// Use uploadProfileImage for buyer profile images (images only)
 router.post('/register/buyer',
   authLimiter,
-  upload.single('profile_image'),
+  uploadProfileImage.single('profile_image'),
   validate(registerBuyerSchema),
   registerBuyer
 );
