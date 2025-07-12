@@ -72,10 +72,10 @@ router.post('/login',
   login
 );
 
-// Transporter registration: must handle file upload before validation
+// Transporter registration: must handle file upload before validation (images only, memory)
 router.post('/register/transporter',
   authLimiter,
-  upload.single('profile_image'),
+  uploadProfileImage.single('profile_image'),
   registerTransporter
 );
 
