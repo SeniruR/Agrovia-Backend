@@ -82,7 +82,7 @@ router.post('/register/transporter',
 // Moderator registration: must handle file upload before validation
 router.post('/register/moderator',
   authLimiter,
-  upload.single('profile_image'),
+  uploadProfileImage.single('profile_image'), // Use memory storage, image-only
   registerModerator
 );
 
