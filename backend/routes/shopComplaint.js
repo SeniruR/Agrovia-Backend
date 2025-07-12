@@ -24,7 +24,7 @@ router.get('/:id', shopComplaintController.getComplaintById);
 // router.get('/attachment/:attachmentId', shopComplaintController.downloadAttachment);
 
 // Public: Update a complaint
-router.put('/:id', shopComplaintController.updateComplaint);
+router.put('/:id', upload.array('attachments', 5), shopComplaintController.updateComplaint);
 
 // Public: Delete a complaint
 router.delete('/:id', shopComplaintController.deleteComplaint);

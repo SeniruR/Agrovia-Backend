@@ -71,7 +71,8 @@ exports.updateComplaint = async (req, res, next) => {
     const result = await CropComplaint.update(req.params.id, updates);
     res.json({ success: true, result });
   } catch (error) {
-    next(error);
+    console.error('CropComplaint update error:', error);
+    res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 };
 
