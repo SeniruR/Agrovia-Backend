@@ -11,8 +11,7 @@ exports.createComplaint = async (req, res, next) => {
       cropType,
       farmer,
       category,
-      orderNumber,
-      status
+      orderNumber
     } = req.body;
 
     // Combine all uploaded files into a single BLOB array (as Buffer)
@@ -31,7 +30,6 @@ exports.createComplaint = async (req, res, next) => {
       farmer,
       category,
       orderNumber: orderNumber === '' ? null : orderNumber,
-      status: status || 'not consider',
       attachments
     });
 
