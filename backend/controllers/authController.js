@@ -1,3 +1,4 @@
+const { hashPassword, comparePassword, sanitizeUser, formatResponse } = require('../utils/helpers');
 // Update user profile and farmer details
 const updateProfileWithFarmerDetails = async (req, res, next) => {
   try {
@@ -209,7 +210,6 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const { generateToken } = require('../middleware/auth');
-const { hashPassword, comparePassword, sanitizeUser, formatResponse } = require('../utils/helpers');
 const FarmerDetails = require('../models/FarmerDetails');
 
 // Register farmer
@@ -234,8 +234,8 @@ const registerFarmer = async (req, res, next) => {
       );
     }
 
-    // Check if NIC already exists (use correct DB column)
-    const existingNIC = await User.findByNIC(req.body.nic_number || req.body.nic);
+    // Check if NIC already exists
+    const existingNIC = await User.findByNIC(nic_number);
     if (existingNIC) {
       return res.status(400).json(
         formatResponse(false, 'User with this NIC number already exists')
@@ -244,18 +244,19 @@ const registerFarmer = async (req, res, next) => {
 
     // Optionally, verify organization_id exists (if provided)
     if (organization_id) {
-      const organizationExists = await Organization.findById(organization_id);
-      if (!organizationExists) {
-        return res.status(400).json(
-          formatResponse(false, 'Selected organization does not exist')
-        );
-      }
+      // You can add organization existence check here if needed
     }
 
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create user
+    // Prepare image buffer and mimetype for BLOB storage
+    let profile_image = null;
+    let profile_image_mime = null;
+    if (req.file) {
+      profile_image = req.file.buffer;
+      profile_image_mime = req.file.mimetype;
+    }
 
     // Map nic_number to nic for DB
     const userData = {
@@ -267,8 +268,9 @@ const registerFarmer = async (req, res, next) => {
       land_size: parseFloat(land_size),
       nic: nic_number,
       address: req.body.address || null,
-      profile_image: req.file ? req.file.filename : null,
-      user_type: 1, // assuming 1 = farmer
+      profile_image,
+      profile_image_mime,
+      user_type: 1,
       birth_date: req.body.birth_date || null,
       description: req.body.description || null,
       division_gramasewa_number: req.body.division_gramasewa_number || null,

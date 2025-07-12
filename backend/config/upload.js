@@ -8,7 +8,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure storage
+// Disk storage (for files you want to save to disk)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -20,6 +20,9 @@ const storage = multer.diskStorage({
     cb(null, `certificate-${uniqueSuffix}${ext}`);
   }
 });
+
+// Memory storage (for BLOB/database storage)
+const memoryStorage = multer.memoryStorage();
 
 // File filter for certificates
 const fileFilter = (req, file, cb) => {
@@ -33,7 +36,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// Disk uploader (default)
 const upload = multer({
   storage: storage,
   limits: {
@@ -42,4 +45,16 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-module.exports = upload;
+// Memory uploader (for BLOBs)
+const uploadMemory = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB default
+  },
+  fileFilter: fileFilter
+});
+
+module.exports = {
+  upload,
+  uploadMemory
+};
