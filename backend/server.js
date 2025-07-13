@@ -49,6 +49,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files (uploaded documents and crop images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/crop-images', express.static(path.join(__dirname, 'uploads/crop-images')));
+const shopProductRoutes = require('./routes/shopProductRoutes');
+
+
+app.use('/api/v1/shop-products', shopProductRoutes);
 
 // API routes
 app.use('/api/v1', routes);
