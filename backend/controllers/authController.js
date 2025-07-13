@@ -489,7 +489,7 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     let farmerDetails = null;
-    if (user.user_type === '1') { // 1 = farmer
+    if (user.user_type === '1' || user.user_type === '1.1') { // 1 or 1.1 = farmer
       farmerDetails = await FarmerDetails.findByUserId(user.id);
     }
     res.json({
