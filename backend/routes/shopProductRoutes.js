@@ -7,12 +7,25 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const shopProductController = require('../controllers/shopProductController');
 const validateShopProduct = require('../middleware/validateShopProduct');
+const { authenticate, authorize } = require('../middleware/auth');
+// routes/shopProducts.js
+router.post(
+  '/',
+  authenticate,
+  authorize(['shop_owner']),
+ 
+  validateShopProduct,
+  shopProductController.createShopProduct // Make sure this is properly imported
+);
 
-router.post('/', validateShopProduct, shopProductController.createShopProduct);
+router.get('/my-shop', 
+  authenticate, // This should add req.user
+  shopProductController.getMyShopProducts
+);
 router.get('/', shopProductController.getAllShopProducts);
 //router.get('/:shopitemid', shopController.getItemById);
 router.delete('/:shopitemid', shopProductController.deleteShopProduct);
-router.get('/shopitemid', shopProductController.getShopProductById);
+router.get('/:shopitemid', shopProductController.getShopProductById);
 // routes/shopProductRoutes.js
 router.put('/:shopitemid', upload.array('images'), shopProductController.updateProduct);
 module.exports = router;

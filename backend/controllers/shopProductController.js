@@ -1,16 +1,43 @@
 const ShopProductModel = require('../models/shopProductModel');
+//const ShopProductModel = require('../models/shopProductModel');
 
 exports.createShopProduct = async (req, res) => {
   try {
-    // Handle file uploads first
-    const uploadedImages = req.files ? req.files.map(file => ({
-      buffer: file.buffer.toString('base64'), // Convert buffer to base64
-      mimetype: file.mimetype,
-      originalname: file.originalname
-    })) : [];
-
-    // Get other fields from req.body
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required. User not found in request.'
+        });
+      }
+        if (req.user.role !== 'shop_owner') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only farmers can create crop posts.'
+        });
+      }
+       const userId = req.user.id;
+      console.log('✅ Creating shop item for User ID:', userId);
+  
+     console.log('Received files:', req.files); // Log received files
+    console.log('Received body:', req.body); // Log received data
+    // Process form data
     const {
+      shop_name, owner_name, email, phone_no, shop_address, city,
+      product_type, product_name, brand, category, season, price,
+      unit, available_quantity, product_description, usage_history,
+      organic_certified, terms_accepted, category_other
+    } = req.body;
+
+    // Process uploaded files
+    const uploadedImages = req.files.map(file => ({
+      buffer: file.buffer.toString('base64'),
+      mimetype: file.mimetype,
+      originalname: file.originalname,
+      size: file.size
+    }));
+
+    // Prepare product data
+    const productData = {
       shop_name,
       owner_name,
       email,
@@ -20,109 +47,51 @@ exports.createShopProduct = async (req, res) => {
       product_type,
       product_name,
       brand,
-      category,
-      season,
-      price,
-      unit,
-      available_quantity,
-      product_description,
-   
-      usage_history,
-      organic_certified,
-      terms_accepted
-    } = req.body;
-
-    console.log("Incoming data:", { ...req.body, images: uploadedImages });
-
-    // Required fields validation
-    const requiredFields = [
-      'shop_name',
-      'owner_name',
-      'email',
-      'phone_no',
-      'shop_address',
-      'city',
-      'product_type',
-      'product_name',
-      'price',
-      'product_description'
-    ];
-
-    const missingFields = requiredFields.filter(field => !req.body[field]);
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        error: 'Missing required fields',
-        missingFields,
-        message: `Please provide: ${missingFields.join(', ')}`
-      });
-    }
-
-    // Field format validation
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-
-    if (!/^(\+94|0)?[0-9]{9,10}$/.test(phone_no.replace(/\s/g, ''))) {
-      return res.status(400).json({ error: 'Invalid Sri Lankan phone number' });
-    }
-
-    if (isNaN(price) || parseFloat(price) <= 0) {
-      return res.status(400).json({ error: 'Price must be a positive number' });
-    }
-
-    // Product type validation
-    const validProductTypes = ['seeds', 'fertilizer', 'chemical'];
-    if (!validProductTypes.includes(product_type)) {
-      return res.status(400).json({
-        error: 'Invalid product type',
-        validTypes: validProductTypes
-      });
-    }
-
-    // Prepare data with safe defaults
-    const productData = {
-      shop_name: shop_name || null,
-      owner_name: owner_name || null,
-      email: email || null,
-      phone_no: phone_no || null,
-      shop_address: shop_address || null,
-      city: city || null,
-      product_type: product_type || null,
-      product_name: product_name || null,
-      brand: brand || null,
-      category: category || null,
+      category: category === "Other" ? category_other : category,
       season: season || null,
-      price: price || 0,
+      price: parseFloat(price),
       unit: unit || null,
-      available_quantity: available_quantity || 0,
-      product_description: product_description || null,
-      
+      available_quantity: parseInt(available_quantity) || 0,
+      product_description,
       usage_history: usage_history || null,
       organic_certified: organic_certified === 'true' || organic_certified === true,
       terms_accepted: terms_accepted === 'true' || terms_accepted === true,
-      images: uploadedImages.length > 0 ? JSON.stringify(uploadedImages) : '[]'
+      images: JSON.stringify(uploadedImages),
+      user_id: userId // From middleware
     };
 
+    // Database insertion
     const result = await ShopProductModel.create(productData);
 
-    res.status(201).json({
-      message: 'Shop product added successfully',
-      shopitemid: result.insertId,
+    return res.status(201).json({
+      success: true,
+      message: 'Shop product created successfully',
+      productId: result.insertId,
       data: {
         ...productData,
-        images: uploadedImages
+        images: uploadedImages.length
       }
     });
 
   } catch (error) {
+    console.error('Detailed error:', {
+      message: error.message,
+      stack: error.stack,
+      body: req.body,
+      files: req.files
+    });
     console.error('Error creating shop product:', error);
-    res.status(500).json({
+    return res.status(500).json({
+      success: false,
       error: 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? {
+        message: error.message,
+        stack: error.stack
+      } : undefined
     });
   }
 };
-
 exports.getAllShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAll();
@@ -183,6 +152,69 @@ if (Buffer.isBuffer(product.images)) {
     });
   }
 };
+exports.getMyShopProducts = async (req, res) => {
+  try {
+    const products = await ShopProductModel.getAllByUserId(req.user.id);
+    
+    const formattedProducts = products.map(product => {
+      // Handle Boolean fields
+      const organic_certified = Boolean(product.organic_certified);
+      const terms_accepted = Boolean(product.terms_accepted);
+
+      let images = [];
+
+      // Case 1: If image is a Buffer (single image in BLOB column)
+      if (Buffer.isBuffer(product.images)) {
+        const base64Image = product.images.toString('base64');
+        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
+      }
+        // Case 2: Images is a string (could be JSON or comma-separated)
+         else if (typeof product.images === 'string') {
+        if (typeof product.images === 'string') {
+  try {
+    const parsed = JSON.parse(product.images);
+    if (Array.isArray(parsed)) {
+      images = parsed.map(img => {
+        if (img.buffer && img.mimetype) {
+          return `data:${img.mimetype};base64,${img.buffer}`;
+        }
+        return img;
+      });
+    } else {
+      images = [parsed];
+    }
+  } catch (err) {
+    images = [product.images]; // fallback if not valid JSON
+  }
+}
+}
+
+if (Buffer.isBuffer(product.images)) {
+  const base64Image = product.images.toString('base64');
+  images = [`data:image/jpeg;base64,${base64Image}`];
+}
+
+      return {
+        ...product,
+        organic_certified,
+        terms_accepted,
+        images
+      };
+    });
+    res.status(200).json({ 
+      success: true, 
+      data: formattedProducts
+    });
+  } catch (error) {
+    console.error('Error fetching shop products:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+// Helper function
 
 /*const getShopProductById = (req, res) => {
   const { id } = req.params;
