@@ -101,7 +101,7 @@ router.get('/profile-full',
 // Update full profile (user + farmer details)
 router.put('/profile-full',
   authenticate,
-  upload.single('profileImage'),
+  uploadMemory.single('profileImage'),
   require('../controllers/authController').updateProfileWithFarmerDetails
 );
 
