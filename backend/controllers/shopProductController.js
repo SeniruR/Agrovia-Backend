@@ -214,6 +214,70 @@ if (Buffer.isBuffer(product.images)) {
     });
   }
 };
+exports.getAllViewMyShopProducts = async (req, res) => {
+  try {
+    const products = await ShopProductModel.getAllViewByUserId(req.user.id);
+    
+    const formattedProducts = products.map(product => {
+      // Handle Boolean fields
+      const organic_certified = Boolean(product.organic_certified);
+      const terms_accepted = Boolean(product.terms_accepted);
+
+      let images = [];
+      const imageData = product.images;
+
+      // Case 1: Image is a Buffer
+      if (Buffer.isBuffer(imageData)) {
+        const base64Image = imageData.toString('base64');
+        images = [`data:image/jpeg;base64,${base64Image}`];
+      } 
+      // Case 2: Image is a JSON string
+      else if (typeof imageData === 'string') {
+        try {
+          const parsed = JSON.parse(imageData);
+          if (Array.isArray(parsed)) {
+            images = parsed.map(img => {
+              if (img.buffer && img.mimetype) {
+                return `data:${img.mimetype};base64,${img.buffer}`;
+              }
+              return img.url || img; // Fallback to URL or raw data
+            });
+          } else {
+            images = [parsed.url || parsed]; // Handle single image
+          }
+        } catch (err) {
+          // If not JSON, treat as direct URL or base64 string
+          images = imageData.includes('http') || imageData.startsWith('data:image') 
+            ? [imageData] 
+            : [];
+        }
+      }
+      // Case 3: Image is already an array
+      else if (Array.isArray(imageData)) {
+        images = imageData;
+      }
+
+      return {
+        ...product,
+        organic_certified,
+        terms_accepted,
+        images: images.filter(img => img) // Remove empty values
+      };
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      data: formattedProducts
+    });
+  } catch (error) {
+    console.error('Error fetching shop products:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
 // Helper function
 
 /*const getShopProductById = (req, res) => {
