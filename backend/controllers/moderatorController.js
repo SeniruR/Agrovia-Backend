@@ -19,7 +19,16 @@ const registerModerator = async (req, res, next) => {
       address,
       skill_description
     } = req.body;
-    const profile_image = req.file ? req.file.filename : null;
+    // Validate uploaded file is an image (extra safety)
+    let profile_image = null;
+    let profile_image_mime = null;
+    if (req.file) {
+      if (!req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json(formatResponse(false, 'Only image files are allowed for profile image.'));
+      }
+      profile_image = req.file.buffer;
+      profile_image_mime = req.file.mimetype;
+    }
     // Arrays: skill_urls[], worker_ids[]
     let skill_urls = req.body['skill_urls[]'] || req.body.skill_urls || [];
     let worker_ids = req.body['worker_ids[]'] || req.body.worker_ids || [];
@@ -48,6 +57,7 @@ const registerModerator = async (req, res, next) => {
       nic,
       address: address || null,
       profile_image,
+      profile_image_mime,
       user_type: 5,
     };
     const result = await User.create(userData);

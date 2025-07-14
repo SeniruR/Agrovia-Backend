@@ -27,22 +27,23 @@ router.get('/health', (req, res) => {
   });
 });
 
-// API routes
+// (undo) removed disableAccounts route registration
 
+// API routes
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
 router.use('/organization-approval', organizationApprovalRoutes);
 router.use('/farmers', farmerRoutes);
-
 router.use('/shop-products', shopProductRoutes);
-
 router.use('/crop-posts', cropPostRoutes);
 router.use('/users', userRoutes);
 router.use('/shop-complaints', shopComplaintRoutes);
 router.use('/transporters', transporterRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
-// (undo) removed disableAccounts route registration
 
+// Mount proxy routes
+const proxyRoutes = require('./proxy');
+router.use('/proxy', proxyRoutes);
 
 module.exports = router;
