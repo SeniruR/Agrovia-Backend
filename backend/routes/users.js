@@ -2,6 +2,10 @@ const express = require('express');
 const UserController = require('../controllers/userController');
 
 const router = express.Router();
+
+// Get user profile image
+router.get('/:id/profile-image', UserController.getProfileImage);
+
 // Get shop owner details by user_id
 router.get('/:id/shop-owner-details', UserController.getShopOwnerDetailsByUserId);
 // Get buyer details by user_id
