@@ -3,43 +3,46 @@ const { pool } = require('../config/database');
 class User {
   // Create a new user
   static async create(userData) {
-      const {
-        full_name,
-        email,
-        password_hash,
-        phone_number,
-        district,
-        nic,
-        address,
-        profile_image,
-        user_type,
-        land_size,
-        birth_date,
-        description,
-        division_gramasewa_number,
-        organization_id,
-        farming_experience,
-        cultivated_crops,
-        irrigation_system,
-        soil_type,
-        farming_certifications
-      } = userData;
-  
-      const userQuery = `
-        INSERT INTO users (
-          full_name, email, password_hash, phone_number, district, nic,
-          address, profile_image, user_type, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      const userValues = [
-        full_name, email, password_hash, phone_number, district, nic,
-        address ?? null, profile_image ?? null, user_type, 0 // always inactive on create
-      ];
+    const {
+      full_name,
+      email,
+      password_hash,
+      phone_number,
+      district,
+      nic,
+      address,
+      profile_image, // should be a Buffer if file uploaded, else null
+      profile_image_mime, // string, e.g. 'image/png', else null
+      user_type,
+      land_size,
+      birth_date,
+      description,
+      division_gramasewa_number,
+      organization_id,
+      farming_experience,
+      cultivated_crops,
+      irrigation_system,
+      soil_type,
+      farming_certifications
+    } = userData;
 
-      try {
-        const [userResult] = await pool.execute(userQuery, userValues);
-        const userId = userResult.insertId;
-        console.log('User insert result:', userResult);
+    const userQuery = `
+      INSERT INTO users (
+        full_name, email, password_hash, phone_number, district, nic,
+        address, profile_image, profile_image_mime, user_type, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    // Set is_active=1 for buyers (user_type=2), 0 for others
+    const isActive = user_type === 2 ? 1 : 0;
+    const userValues = [
+      full_name, email, password_hash, phone_number, district, nic,
+      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, isActive
+    ];
+
+    try {
+      const [userResult] = await pool.execute(userQuery, userValues);
+      const userId = userResult.insertId;
+      console.log('User insert result:', userResult);
 
         if (user_type === 1) {
           const farmerQuery = `

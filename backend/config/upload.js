@@ -8,7 +8,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure storage
+// Disk storage (for files you want to save to disk)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -21,11 +21,13 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter for certificates
-const fileFilter = (req, file, cb) => {
-  // Accept PDF and image files
+// Memory storage (for BLOB/database storage)
+const memoryStorage = multer.memoryStorage();
+
+
+// File filter for certificates (PDF and images)
+const certificateFileFilter = (req, file, cb) => {
   const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-  
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -33,13 +35,45 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// File filter for profile images (images only)
+const imageFileFilter = (req, file, cb) => {
+  if (file.mimetype && file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type. Only image files are allowed.'), false);
+  }
+};
+
+
+// Disk uploader (default, for certificates)
 const upload = multer({
   storage: storage,
   limits: {
     fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB default
   },
-  fileFilter: fileFilter
+  fileFilter: certificateFileFilter
 });
 
-module.exports = upload;
+// Memory uploader for profile images (images only)
+const uploadProfileImage = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB default
+  },
+  fileFilter: imageFileFilter
+});
+
+// Memory uploader for certificates (PDF/images)
+const uploadMemory = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB default
+  },
+  fileFilter: certificateFileFilter
+});
+
+module.exports = {
+  upload,
+  uploadMemory,
+  uploadProfileImage
+};

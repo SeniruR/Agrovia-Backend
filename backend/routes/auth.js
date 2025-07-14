@@ -1,5 +1,5 @@
 const express = require('express');
-const upload = require('../config/upload');
+const { upload, uploadMemory, uploadProfileImage } = require('../config/upload');
 const { authLimiter } = require('../middleware/rateLimiter');
 const { validate, registerFarmerSchema, registerCommitteeMemberSchema, registerBuyerSchema, loginSchema } = require('../middleware/validation');
 const { authenticate, authorize } = require('../middleware/auth');
@@ -21,7 +21,7 @@ const router = express.Router();
 // Shop Owner registration: must handle file upload before validation
 router.post('/register/shop-owner',
   authLimiter,
-  upload.fields([
+  uploadMemory.fields([
     { name: 'profile_image', maxCount: 1 },
     { name: 'shop_license', maxCount: 1 },
     { name: 'shop_image', maxCount: 1 }
@@ -43,7 +43,7 @@ function coerceFarmerFields(req, res, next) {
 // Farmer registration: must handle file upload before validation
 router.post('/register/farmer', 
   authLimiter,
-  upload.single('profile_image'),
+  uploadMemory.single('profile_image'),
   coerceFarmerFields, // <-- coerce land_size to number
   validate(registerFarmerSchema),
   registerFarmer
@@ -51,9 +51,10 @@ router.post('/register/farmer',
 
 
 // Buyer registration: must handle file upload before validation
+// Use uploadProfileImage for buyer profile images (images only)
 router.post('/register/buyer',
   authLimiter,
-  upload.single('profile_image'),
+  uploadProfileImage.single('profile_image'),
   validate(registerBuyerSchema),
   registerBuyer
 );
@@ -71,17 +72,17 @@ router.post('/login',
   login
 );
 
-// Transporter registration: must handle file upload before validation
+// Transporter registration: must handle file upload before validation (images only, memory)
 router.post('/register/transporter',
   authLimiter,
-  upload.single('profile_image'),
+  uploadProfileImage.single('profile_image'),
   registerTransporter
 );
 
 // Moderator registration: must handle file upload before validation
 router.post('/register/moderator',
   authLimiter,
-  upload.single('profile_image'),
+  uploadProfileImage.single('profile_image'), // Use memory storage, image-only
   registerModerator
 );
 
