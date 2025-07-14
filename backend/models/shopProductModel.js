@@ -49,14 +49,14 @@ const ShopProductModel = {
 
 
   getAll: async () => {
-    const [rows] = await pool.execute('SELECT * FROM shop_products');
+    const [rows] = await pool.execute('SELECT * FROM shop_products ORDER BY created_at DESC');
     return rows;
   },
   getAllByUserId: async (userId) => {
   try {
     console.log(`🛢️ Executing query for user ${userId}`);
     const [rows] = await pool.execute(
-      'SELECT * FROM shop_products WHERE user_id = ?',
+      'SELECT * FROM shop_products WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
     );
     console.log('Query results:', rows);

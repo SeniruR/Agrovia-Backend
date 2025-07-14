@@ -361,30 +361,21 @@ exports.updateProduct = async (req, res) => {
     // Initialize update data with sanitized fields
     const updateData = {
       ...req.body,
-      // Convert string booleans to actual booleans
       organic_certified: req.body.organic_certified === 'true',
-      // Convert string numbers to actual numbers
       price: parseFloat(req.body.price),
       available_quantity: parseInt(req.body.available_quantity)
     };
 
     // Handle image updates
     if (req.files && req.files.length > 0) {
-      // Process new uploaded files (assuming you're using Cloudinary or similar)
-      const uploadResults = await Promise.all(
-        req.files.map(file => {
-          return new Promise((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-              { folder: 'shop-products' },
-              (error, result) => {
-                if (error) reject(error);
-                else resolve(result.secure_url);
-              }
-            ).end(file.buffer);
-          });
-        })
-      );
-      
+      // Convert uploaded files to base64 format
+      const uploadedImages = req.files.map(file => ({
+        buffer: file.buffer.toString('base64'),
+        mimetype: file.mimetype,
+        originalname: file.originalname,
+        size: file.size
+      }));
+
       // Get remaining images that weren't deleted
       let remainingImages = [];
       if (req.body.remainingImages) {
@@ -402,15 +393,14 @@ exports.updateProduct = async (req, res) => {
         }
       }
 
-      // Combine new and remaining images
-      updateData.images = [...uploadResults, ...remainingImages];
+      // Combine new and remaining images, then stringify for DB
+      updateData.images = JSON.stringify([...uploadedImages, ...remainingImages]);
     }
 
     // Remove fields that shouldn't be updated
     delete updateData.shopitemid;
     delete updateData.remainingImages;
 
-    // Validate update data
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
         success: false,
@@ -418,7 +408,6 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
-    // Perform the update
     const updatedProduct = await ShopProductModel.update(shopitemid, updateData);
 
     if (!updatedProduct) {
@@ -428,7 +417,6 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
-    // Successful response
     res.status(200).json({
       success: true,
       message: 'Product updated successfully',
