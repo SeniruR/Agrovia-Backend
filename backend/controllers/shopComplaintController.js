@@ -111,9 +111,10 @@ exports.getComplaintById = async (req, res, next) => {
 exports.updateComplaint = async (req, res, next) => {
   try {
     let payload = { ...req.body };
-    // Handle file uploads for attachments
+    // Debug incoming payload and files
+    console.log('Update shop complaint payload:', JSON.stringify(payload));
     if (req.files && req.files.length > 0) {
-      // Store the file directly as base64 string if one file, else as JSON array
+      console.log('Received files:', req.files.length);
       if (req.files.length === 1) {
         const fileBuffer = req.files[0].buffer;
         payload.attachments = JSON.stringify([fileBuffer.toString('base64')]);
@@ -121,10 +122,25 @@ exports.updateComplaint = async (req, res, next) => {
         payload.attachments = JSON.stringify(req.files.map(file => file.buffer.toString('base64')));
       }
     }
-    const result = await ShopComplaint.update(req.params.id, payload);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Complaint not found' });
-    res.json({ success: true, message: 'Complaint updated' });
+
+    // Ensure purchaseDate is present and purchase_date is not
+    if (payload.purchase_date) {
+      payload.purchaseDate = payload.purchase_date;
+      delete payload.purchase_date;
+    }
+    // Log final payload before DB update
+    console.log('Final payload for DB update:', JSON.stringify(payload));
+    try {
+      const result = await ShopComplaint.update(req.params.id, payload);
+      console.log('DB update result:', result);
+      if (result.affectedRows === 0) return res.status(404).json({ error: 'Complaint not found' });
+      res.json({ success: true, message: 'Complaint updated' });
+    } catch (dbError) {
+      console.error('DB error during shop complaint update:', dbError);
+      return res.status(500).json({ error: 'Database error', details: dbError.message });
+    }
   } catch (error) {
+    console.error('General error in updateComplaint:', error);
     next(error);
   }
 };

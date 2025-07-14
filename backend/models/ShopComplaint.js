@@ -147,11 +147,25 @@ class ShopComplaint {
     const values = [];
     for (const key in data) {
       if (key === 'attachments') {
-        // Always store as JSON string
-        if (Array.isArray(data[key])) values.push(JSON.stringify(data[key]));
-        else if (data[key]) values.push(JSON.stringify([data[key]]));
-        else values.push('[]');
+        // ...existing code...
+        if (typeof data[key] === 'string') {
+          try {
+            const parsed = JSON.parse(data[key]);
+            values.push(data[key]);
+          } catch {
+            values.push(JSON.stringify([data[key]]));
+          }
+        } else if (Array.isArray(data[key])) {
+          values.push(JSON.stringify(data[key]));
+        } else if (data[key]) {
+          values.push(JSON.stringify([data[key]]));
+        } else {
+          values.push('[]');
+        }
         fields.push('attachments = ?');
+      } else if (key === 'purchaseDate') {
+        fields.push('purchase_date = ?');
+        values.push(data[key]);
       } else {
         fields.push(`${key} = ?`);
         values.push(data[key]);
