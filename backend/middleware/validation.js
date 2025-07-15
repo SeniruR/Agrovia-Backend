@@ -257,5 +257,15 @@ module.exports = {
     delivery_areas: Joi.string().allow('').max(500),
     shop_license: Joi.any(),
     shop_image: Joi.any()
+  }),
+
+  // Contact form validation schema
+  contactSchema: Joi.object({
+    name: Joi.string().min(2).max(255).required(),
+    email: Joi.string().email().required(),
+    phone: Joi.string().pattern(/^[0-9+\-\s()]{10,15}$/).required(),
+    subject: Joi.string().min(5).max(255).required(),
+    message: Joi.string().min(20).max(2000).required(),
+    userType: Joi.string().valid('farmer', 'buyer', 'supplier', 'logistics', 'organization', 'other').required()
   })
 };
