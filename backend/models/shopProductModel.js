@@ -49,14 +49,14 @@ const ShopProductModel = {
 
 
   getAll: async () => {
-    const [rows] = await pool.execute('SELECT * FROM shop_products');
+    const [rows] = await pool.execute('SELECT * FROM shop_products ORDER BY created_at DESC');
     return rows;
   },
   getAllByUserId: async (userId) => {
   try {
     console.log(`🛢️ Executing query for user ${userId}`);
     const [rows] = await pool.execute(
-      'SELECT * FROM shop_products WHERE user_id = ?',
+      'SELECT * FROM shop_products WHERE user_id = ? ORDER BY created_at DESC',
       [userId]
     );
     console.log('Query results:', rows);
@@ -70,6 +70,27 @@ const ShopProductModel = {
     throw err;
   }
 },
+getAllViewByUserId: async (userId) => {
+  try {
+    console.log(`🛢️ Executing query for user ${userId}`);
+    const [rows] = await pool.execute(
+      'SELECT * FROM user_shop_details WHERE user_id = ?',
+      [userId]
+    );
+    console.log('Query results:', rows);
+    return rows || []; // Ensure array is returned
+  } catch (err) {
+    console.error('Database error:', {
+      message: err.message,
+      sqlMessage: err.sqlMessage,
+      sql: err.sql
+    });
+    throw err;
+  }
+},
+
+
+
    findById: async (shopitemid) => {
     const [rows] = await pool.execute(
       'SELECT * FROM shop_products WHERE shopitemid = ?',
