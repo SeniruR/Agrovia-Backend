@@ -7,44 +7,66 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
 
     // Parse form data (for file upload support)
     let data = req.body;
-    let profileImagePath = null;
+    console.log('Received form data keys:', Object.keys(data));
+    
+    // Handle profile image upload (memory storage)
+    let profileImageBuffer = null;
+    let profileImageMime = null;
     if (req.file) {
-      profileImagePath = `/uploads/${req.file.filename}`;
+      // Validate file type
+      if (!req.file.mimetype.startsWith('image/')) {
+        return res.status(400).json({ success: false, message: 'Profile image must be an image file.' });
+      }
+      
+      // Check file size (limit to 50MB for very high quality images)
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (req.file.size > maxSize) {
+        return res.status(400).json({ success: false, message: 'Profile image must be smaller than 50MB.' });
+      }
+      
+      profileImageBuffer = req.file.buffer;
+      profileImageMime = req.file.mimetype;
+      console.log(`Profile image received: ${req.file.buffer.length} bytes, type: ${req.file.mimetype}`);
     }
 
     // Build user update fields
     const userFields = {
-      full_name: data.fullName,
+      full_name: data.full_name || data.name || data.fullName,
       email: data.email,
       phone_number: data.phoneNumber,
       district: data.district,
       nic: data.nic,
       address: data.address,
     };
-    if (profileImagePath) userFields.profile_image = profileImagePath;
+    if (profileImageBuffer) {
+      userFields.profile_image = profileImageBuffer;
+      userFields.profile_image_mime = profileImageMime;
+    }
 
-    // Build farmer_details update fields
-    const farmerFields = {
-      land_size: data.landSize,
-      birth_date: data.birthDate,
-      description: data.description,
-      division_gramasewa_number: data.divisionGramasewaNumber,
-      organization_committee_number: data.organizationCommitteeNumber,
-      farming_experience: data.farmingExperience,
-      cultivated_crops: data.primaryCrops,
-      secondary_crops: data.secondaryCrops,
-      farming_methods: data.farmingMethods,
-      irrigation_system: data.irrigationSystem,
-      soil_type: data.soilType,
-      education: data.educationLevel,
-      annual_income: data.annualIncome,
-      farming_certifications: data.farmingCertifications,
-    };
+    // Build farmer_details update fields - only include valid columns
+    const farmerFields = {};
+    
+    // Only add fields that exist in the database
+    if (data.landSize !== undefined) farmerFields.land_size = data.landSize;
+    if (data.description !== undefined) farmerFields.description = data.description;
+    if (data.divisionGramasewaNumber !== undefined) farmerFields.division_gramasewa_number = data.divisionGramasewaNumber;
+    if (data.organizationId !== undefined) farmerFields.organization_id = data.organizationId;
+    if (data.farmingExperience !== undefined) farmerFields.farming_experience = data.farmingExperience;
+    if (data.cultivatedCrops !== undefined) farmerFields.cultivated_crops = data.cultivatedCrops;
+    if (data.irrigationSystem !== undefined) farmerFields.irrigation_system = data.irrigationSystem;
+    if (data.soilType !== undefined) farmerFields.soil_type = data.soilType;
+    if (data.farmingCertifications !== undefined) farmerFields.farming_certifications = data.farmingCertifications;
+
+    console.log('Final farmerFields being processed:', farmerFields);
 
     // Update users table
-    const userSet = Object.keys(userFields).map(f => `${f} = ?`).join(', ');
-    const userVals = Object.values(userFields);
-    await pool.query(`UPDATE users SET ${userSet} WHERE id = ?`, [...userVals, userId]);
+    if (Object.keys(userFields).length > 0) {
+      const userSet = Object.keys(userFields).map(f => `${f} = ?`).join(', ');
+      const userVals = Object.values(userFields);
+      console.log('Updating users table with fields:', Object.keys(userFields));
+      console.log('Profile image buffer size:', profileImageBuffer ? profileImageBuffer.length : 'No image');
+      await pool.query(`UPDATE users SET ${userSet} WHERE id = ?`, [...userVals, userId]);
+    }
 
     // Check if farmer_details exists
     const [rows] = await pool.query('SELECT user_id FROM farmer_details WHERE user_id = ?', [userId]);
@@ -61,7 +83,25 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
       );
     }
 
-    return res.json({ success: true, message: 'Profile updated successfully.' });
+    // Fetch and return the updated profile
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found after update' });
+    }
+    
+    let farmerDetails = null;
+    if (user.user_type === '1' || user.user_type === '1.1') { // 1 or 1.1 = farmer
+      farmerDetails = await FarmerDetails.findByUserId(user.id);
+    }
+    
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully.',
+      user: {
+        ...sanitizeUser(user),
+        farmer_details: farmerDetails
+      }
+    });
   } catch (err) {
     console.error('Profile update error:', err);
     return res.status(500).json({ success: false, message: 'Failed to update profile', error: err.message });

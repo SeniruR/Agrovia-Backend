@@ -1,6 +1,49 @@
 const { pool } = require('../config/database');
 
 class UserController {
+  // Get user profile image
+  static async getProfileImage(req, res) {
+    try {
+      const userId = req.params.id;
+      console.log(`📷 Profile image request for user ID: ${userId}`);
+      
+      const query = `SELECT profile_image, profile_image_mime FROM users WHERE id = ?`;
+      const [rows] = await pool.execute(query, [userId]);
+      
+      if (rows.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'User not found' 
+        });
+      }
+      
+      const user = rows[0];
+      
+      if (!user.profile_image) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Profile image not found' 
+        });
+      }
+      
+      // Set appropriate headers
+      const mimeType = user.profile_image_mime || 'image/jpeg';
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+      
+      // Send the image blob
+      res.send(user.profile_image);
+      
+    } catch (error) {
+      console.error('❌ Get profile image error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve profile image',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+
   // Get shop owner details by user_id
   static async getShopOwnerDetailsByUserId(req, res) {
     try {
