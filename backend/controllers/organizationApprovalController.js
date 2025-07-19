@@ -101,6 +101,17 @@ exports.approveOrganization = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(500).json({ success: false, message: 'Failed to approve organization.' });
     }
+    // Also set is_active=1 for the contact person user
+    const contactPersonId = org.org_contactperson_id;
+    if (contactPersonId) {
+      const User = require('../models/User');
+      try {
+        await User.updateActiveStatus(contactPersonId, 1);
+      } catch (e) {
+        // Log but don't block approval if user update fails
+        console.error('Failed to update user is_active for contact person:', e);
+      }
+    }
     res.json({ success: true, message: 'Organization approved.' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error approving organization.' });
