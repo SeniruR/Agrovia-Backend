@@ -1,7 +1,12 @@
+
 const express = require('express');
 const UserController = require('../controllers/userController');
-
 const router = express.Router();
+// PATCH /users/:id/farmer-organization - update organization_id in farmer_details
+router.patch('/:id/farmer-organization', UserController.updateFarmerOrganization);
+
+// PATCH /users/:id/organization - update user's organization_id
+router.patch('/:id/organization', UserController.updateUserOrganization);
 
 // Get user profile image
 router.get('/:id/profile-image', UserController.getProfileImage);

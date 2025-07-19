@@ -1,6 +1,44 @@
 const { pool } = require('../config/database');
 
 class UserController {
+  // PATCH /users/:id/farmer-organization - update organization_id in farmer_details
+  static async updateFarmerOrganization(req, res) {
+    try {
+      const userId = req.params.id;
+      const { organization_id } = req.body;
+      if (!organization_id) {
+        return res.status(400).json({ success: false, message: 'organization_id is required' });
+      }
+      const query = 'UPDATE farmer_details SET organization_id = ? WHERE user_id = ?';
+      const [result] = await require('../config/database').pool.execute(query, [organization_id, userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Farmer details not found or organization_id not changed' });
+      }
+      return res.json({ success: true, message: 'Farmer organization_id updated successfully' });
+    } catch (err) {
+      console.error('Error updating farmer_details organization_id:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+  // PATCH /users/:id/organization - update user's organization_id
+  static async updateUserOrganization(req, res) {
+    try {
+      const userId = req.params.id;
+      const { organization_id } = req.body;
+      if (!organization_id) {
+        return res.status(400).json({ success: false, message: 'organization_id is required' });
+      }
+      const query = 'UPDATE users SET organization_id = ? WHERE id = ?';
+      const [result] = await pool.execute(query, [organization_id, userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'User not found or organization_id not changed' });
+      }
+      return res.json({ success: true, message: 'User organization_id updated successfully' });
+    } catch (err) {
+      console.error('Error updating user organization_id:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
   // Get user profile image
   static async getProfileImage(req, res) {
     try {
