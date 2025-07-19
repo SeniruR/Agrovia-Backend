@@ -19,7 +19,8 @@ const registerFarmerSchema = Joi.object({
   cultivated_crops: Joi.string().allow('').max(100),
   irrigation_system: Joi.string().allow('').max(100),
   soil_type: Joi.string().allow('').max(100),
-  farming_certifications: Joi.string().allow('').max(255)
+  farming_certifications: Joi.string().allow('').max(255),
+  user_type: Joi.string().valid('1', '1.1').optional()
 });
 
 const registerCommitteeMemberSchema = Joi.object({

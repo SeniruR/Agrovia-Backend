@@ -332,7 +332,7 @@ const registerFarmer = async (req, res, next) => {
       address: req.body.address || null,
       profile_image,
       profile_image_mime,
-      user_type: 1,
+      user_type: req.body.user_type || 1,
       birth_date: req.body.birth_date || null,
       description: req.body.description || null,
       division_gramasewa_number: req.body.division_gramasewa_number || null,
@@ -350,9 +350,11 @@ const registerFarmer = async (req, res, next) => {
 
     // After user is created, insert into disable_accounts with case_id = 2
     try {
+      // If user_type is '1.1', use case_id = 3, else 2
+      const caseId = (userData.user_type === '1.1') ? 3 : 2;
       await require('../config/database').pool.execute(
         'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
-        [userId, 2]
+        [userId, caseId]
       );
     } catch (disableErr) {
       console.error('Failed to insert into disable_accounts:', disableErr);
