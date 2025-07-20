@@ -1,6 +1,30 @@
 const { pool } = require('../config/database');
 
 class UserController {
+  // GET /users?userType=1,1.1&search=NAME - search users by type and name (for farmer search)
+  static async searchUsers(req, res) {
+    try {
+      let { userType, search } = req.query;
+      let types = [];
+      if (userType) {
+        types = userType.split(',').map(t => t.trim());
+      } else {
+        types = ['1', '1.1']; // default to farmer types
+      }
+      let sql = 'SELECT id, full_name, district, phone_number FROM users WHERE user_type IN (' + types.map(() => '?').join(',') + ')';
+      let params = [...types];
+      if (search && search.length > 0) {
+        sql += ' AND full_name LIKE ?';
+        params.push(`%${search}%`);
+      }
+      sql += ' ORDER BY full_name LIMIT 20';
+      const [rows] = await pool.execute(sql, params);
+      res.json(rows);
+    } catch (err) {
+      console.error('User search error:', err);
+      res.status(500).json({ error: 'Failed to search users' });
+    }
+  }
   // PATCH /users/:id/farmer-organization - update organization_id in farmer_details
   static async updateFarmerOrganization(req, res) {
     try {

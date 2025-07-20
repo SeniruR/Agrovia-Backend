@@ -1,3 +1,18 @@
+// Add or update admin reply for a crop complaint
+exports.addReply = async (req, res, next) => {
+  try {
+    const { reply } = req.body;
+    if (!reply) return res.status(400).json({ success: false, message: 'Reply is required' });
+    // Set replyed_at to current timestamp
+    const result = await CropComplaint.update(req.params.id, { reply, replyed_at: new Date() });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+    res.json({ success: true, message: 'Reply added' });
+  } catch (error) {
+    next(error);
+  }
+};
 const CropComplaint = require('../models/CropComplaint');
 
 // Create a new crop complaint (with BLOB attachments in main table)
@@ -9,7 +24,7 @@ exports.createComplaint = async (req, res, next) => {
       submittedBy,
       priority,
       cropType,
-      farmer,
+      to_farmer,
       category,
       orderNumber
     } = req.body;
@@ -27,7 +42,7 @@ exports.createComplaint = async (req, res, next) => {
       submittedBy,
       priority,
       cropType,
-      farmer,
+      to_farmer,
       category,
       orderNumber: orderNumber === '' ? null : orderNumber,
       attachments

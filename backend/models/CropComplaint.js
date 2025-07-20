@@ -9,7 +9,7 @@ class CropComplaint {
       submittedBy,
       priority,
       cropType,
-      farmer,
+      to_farmer,
       category,
       orderNumber,
       attachments = null // images as BLOB
@@ -22,7 +22,7 @@ class CropComplaint {
 
     const query = `
       INSERT INTO crop_complaints
-        (title, description, submitted_by, priority, crop_type, farmer, category, order_number, attachments, submitted_at)
+        (title, description, submitted_by, priority, crop_type, to_farmer, category, order_number, attachments, submitted_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
@@ -32,7 +32,7 @@ class CropComplaint {
         submittedBy ?? null,
         priority ?? null,
         cropType ?? null,
-        farmer ?? null,
+        to_farmer ?? null,
         category ?? null,
         orderNumber ?? null,
         attachmentsStr,

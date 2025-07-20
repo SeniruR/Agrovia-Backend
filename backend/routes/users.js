@@ -5,6 +5,9 @@ const router = express.Router();
 // PATCH /users/:id/farmer-organization - update organization_id in farmer_details
 router.patch('/:id/farmer-organization', UserController.updateFarmerOrganization);
 
+// GET /users?userType=1,1.1&search=NAME - search users by type and name (for farmer search)
+router.get('/', UserController.searchUsers);
+
 // PATCH /users/:id/organization - update user's organization_id
 router.patch('/:id/organization', UserController.updateUserOrganization);
 
