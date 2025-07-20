@@ -1,3 +1,5 @@
+const CropComplaint = require('../models/CropComplaint');
+
 // Add or update admin reply for a crop complaint
 exports.addReply = async (req, res, next) => {
   try {
@@ -13,7 +15,6 @@ exports.addReply = async (req, res, next) => {
     next(error);
   }
 };
-const CropComplaint = require('../models/CropComplaint');
 
 // Create a new crop complaint (with BLOB attachments in main table)
 exports.createComplaint = async (req, res, next) => {
@@ -42,7 +43,7 @@ exports.createComplaint = async (req, res, next) => {
       submittedBy,
       priority,
       cropType,
-      to_farmer,
+      farmer: to_farmer,
       category,
       orderNumber: orderNumber === '' ? null : orderNumber,
       attachments
@@ -69,6 +70,7 @@ exports.getComplaintById = async (req, res, next) => {
   try {
     const complaint = await CropComplaint.findById(req.params.id);
     if (!complaint) return res.status(404).json({ error: 'Not found' });
+    
     res.json(complaint);
   } catch (error) {
     next(error);
@@ -80,25 +82,91 @@ exports.updateComplaint = async (req, res, next) => {
   try {
     const updates = { ...req.body };
     // Debug incoming payload and files
-    console.log('Update crop complaint payload:', JSON.stringify(updates));
+    console.log('Update crop complaint payload:', JSON.stringify(updates, null, 2));
+    console.log('Complaint ID:', req.params.id);
+    
+    // Validate required fields
+    if (!updates.title || !updates.description) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Title and description are required' 
+      });
+    }
+    
+    // Validate priority values
+    const validPriorities = ['low', 'medium', 'high'];
+    if (updates.priority && !validPriorities.includes(updates.priority)) {
+      // Map "urgent" to "high" for backwards compatibility
+      if (updates.priority === 'urgent') {
+        updates.priority = 'high';
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Invalid priority. Must be one of: ${validPriorities.join(', ')}` 
+        });
+      }
+    }
+    
+    // Map frontend camelCase field names to database snake_case field names
+    if (updates.cropType !== undefined) {
+      updates.crop_type = updates.cropType;
+      delete updates.cropType;
+    }
+    if (updates.orderNumber !== undefined) {
+      updates.order_number = updates.orderNumber;
+      delete updates.orderNumber;
+    }
+    if (updates.submittedBy !== undefined) {
+      updates.submitted_by = updates.submittedBy;
+      delete updates.submittedBy;
+    }
+    if (updates.farmer !== undefined) {
+      updates.to_farmer = updates.farmer; // Map farmer to to_farmer for database
+      delete updates.farmer;
+    }
+    
     if (req.files && req.files.length > 0) {
       console.log('Received files:', req.files.length);
       // Always store as JSON array of base64 strings
       updates.attachments = JSON.stringify(req.files.map(file => file.buffer.toString('base64')));
     }
+    
+    // Remove any undefined or null values
+    Object.keys(updates).forEach(key => {
+      if (updates[key] === undefined || updates[key] === null) {
+        delete updates[key];
+      }
+    });
+    
     // Log final payload before DB update
-    console.log('Final payload for DB update:', JSON.stringify(updates));
+    console.log('Final payload for DB update:', JSON.stringify(updates, null, 2));
+    
     try {
       const result = await CropComplaint.update(req.params.id, updates);
       console.log('DB update result:', result);
-      res.json({ success: true, result });
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Complaint not found or no changes made' 
+        });
+      }
+      
+      res.json({ success: true, message: 'Complaint updated successfully', result });
     } catch (dbError) {
       console.error('DB error during crop complaint update:', dbError);
-      res.status(500).json({ error: 'Database error', details: dbError.message });
+      res.status(500).json({ 
+        success: false, 
+        error: 'Database error', 
+        details: dbError.message 
+      });
     }
   } catch (error) {
     console.error('General error in updateComplaint:', error);
-    res.status(500).json({ error: error.message || 'Internal Server Error' });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Internal Server Error' 
+    });
   }
 };
 
