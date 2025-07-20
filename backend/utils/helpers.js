@@ -29,11 +29,14 @@ const sanitizeUser = (user) => {
   // Map user_type to role for frontend compatibility
   if (sanitizedUser.user_type) {
     const userTypeMap = {
+      '0': 'admin',
       '1': 'farmer',
-      '2': 'buyer', 
+      '1.1': 'farmer', // Farmer (Organizer)
+      '2': 'buyer',
       '3': 'shop_owner',
       '4': 'transporter',
-      '5': 'admin',
+      '5': 'moderator',
+      '5.1': 'main_moderator',
       '6': 'committee_member'
     };
     
