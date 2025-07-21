@@ -604,6 +604,33 @@ class CropPost {
       throw error;
     }
   }
+  
+
+  static async updateById(id, farmerId, fields) {
+    // Build dynamic SET clause
+    const setClause = [];
+    const values = [];
+    let idx = 1;
+    for (const [key, value] of Object.entries(fields)) {
+      setClause.push(`${key} = $${idx++}`);
+      values.push(value);
+    }
+    if (setClause.length === 0) return false;
+
+    values.push(id, farmerId);
+
+    const query = `
+      UPDATE crop_posts
+      SET ${setClause.join(', ')}
+      WHERE id = $${idx++} AND farmer_id = $${idx}
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, values);
+    return rows[0];
+  }
 }
+
+
+
 
 module.exports = CropPost;
