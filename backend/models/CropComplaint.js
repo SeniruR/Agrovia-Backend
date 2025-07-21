@@ -15,6 +15,11 @@ class CropComplaint {
       attachments = null // images as BLOB
     } = complaint;
 
+    // Debug: Log the complaint data
+    console.log('Model received complaint:', complaint);
+    console.log('Model to_farmer value:', to_farmer);
+    console.log('Model to_farmer type:', typeof to_farmer);
+
     // Ensure attachments is always a JSON stringified array
     let attachmentsStr = '[]';
     if (Array.isArray(attachments)) attachmentsStr = JSON.stringify(attachments);
@@ -25,19 +30,26 @@ class CropComplaint {
         (title, description, submitted_by, priority, crop_type, to_farmer, category, order_number, attachments, submitted_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
+    
+    const values = [
+      title ?? null,
+      description ?? null,
+      submittedBy ?? null,
+      priority ?? null,
+      cropType ?? null,
+      to_farmer ?? null,
+      category ?? null,
+      orderNumber ?? null,
+      attachmentsStr,
+      new Date() // submitted_at as current timestamp
+    ];
+    
+    // Debug: Log the values being inserted
+    console.log('Inserting values:', values);
+    console.log('to_farmer value being inserted:', values[5]);
+    
     try {
-      const [result] = await pool.execute(query, [
-        title ?? null,
-        description ?? null,
-        submittedBy ?? null,
-        priority ?? null,
-        cropType ?? null,
-        to_farmer ?? null,
-        category ?? null,
-        orderNumber ?? null,
-        attachmentsStr,
-        new Date() // submitted_at as current timestamp
-      ]);
+      const [result] = await pool.execute(query, values);
       return result;
     } catch (error) {
       throw error;

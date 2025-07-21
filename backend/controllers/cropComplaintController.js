@@ -30,6 +30,12 @@ exports.createComplaint = async (req, res, next) => {
       orderNumber
     } = req.body;
 
+    // Debug: Log all received data
+    console.log('Received request body:', req.body);
+    console.log('to_farmer value:', to_farmer);
+    console.log('to_farmer type:', typeof to_farmer);
+    console.log('to_farmer is empty?', !to_farmer || to_farmer === '');
+
     // Combine all uploaded files into a single BLOB array (as Buffer)
     let attachments = null;
     if (req.files && req.files.length > 0) {
@@ -43,7 +49,7 @@ exports.createComplaint = async (req, res, next) => {
       submittedBy,
       priority,
       cropType,
-      farmer: to_farmer,
+      to_farmer: to_farmer,
       category,
       orderNumber: orderNumber === '' ? null : orderNumber,
       attachments
@@ -176,6 +182,85 @@ exports.deleteComplaint = async (req, res, next) => {
     const result = await CropComplaint.delete(req.params.id);
     res.json({ success: true, result });
   } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: Deactivate farmer account from crop complaint
+exports.deactivateFarmer = async (req, res, next) => {
+  try {
+    const { pool } = require('../config/database');
+    const complaintId = req.params.id;
+
+    // Get the complaint details to find the farmer
+    const [complaintRows] = await pool.execute(
+      'SELECT to_farmer FROM crop_complaints WHERE id = ?', 
+      [complaintId]
+    );
+
+    if (complaintRows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Complaint not found' 
+      });
+    }
+
+    const farmerId = complaintRows[0].to_farmer;
+    
+    if (!farmerId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No farmer associated with this complaint' 
+      });
+    }
+
+    // Get farmer details before deactivating
+    const [farmerRows] = await pool.execute(
+      'SELECT id, full_name, is_active FROM users WHERE id = ?', 
+      [farmerId]
+    );
+
+    if (farmerRows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Farmer not found' 
+      });
+    }
+
+    const farmer = farmerRows[0];
+
+    if (farmer.is_active === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Farmer account is already deactivated' 
+      });
+    }
+
+    // Deactivate the farmer account
+    const [result] = await pool.execute(
+      'UPDATE users SET is_active = 0 WHERE id = ?',
+      [farmerId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to deactivate farmer account' 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Farmer account "${farmer.full_name}" has been deactivated successfully`,
+      farmer: {
+        id: farmer.id,
+        full_name: farmer.full_name,
+        is_active: 0
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Deactivate farmer error:', error);
     next(error);
   }
 };

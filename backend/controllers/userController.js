@@ -333,6 +333,63 @@ class UserController {
       });
     }
   }
+
+  // Update user active status (activate/deactivate)
+  static async updateUserActiveStatus(req, res) {
+    try {
+      const userId = req.params.id;
+      const { is_active } = req.body;
+
+      // Validate input
+      if (typeof is_active !== 'number' || (is_active !== 0 && is_active !== 1)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'is_active must be 0 (deactivate) or 1 (activate)' 
+        });
+      }
+
+      // Check if user exists
+      const [userCheck] = await pool.execute('SELECT id, full_name FROM users WHERE id = ?', [userId]);
+      if (userCheck.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'User not found' 
+        });
+      }
+
+      // Update user active status
+      const [result] = await pool.execute(
+        'UPDATE users SET is_active = ? WHERE id = ?',
+        [is_active, userId]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Failed to update user status' 
+        });
+      }
+
+      const action = is_active === 1 ? 'activated' : 'deactivated';
+      res.json({ 
+        success: true, 
+        message: `User account ${action} successfully`,
+        user: {
+          id: userId,
+          full_name: userCheck[0].full_name,
+          is_active: is_active
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Update user active status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update user status',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
 }
 
 module.exports = UserController;
