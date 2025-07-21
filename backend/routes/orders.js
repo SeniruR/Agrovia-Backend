@@ -58,6 +58,8 @@ router.post('/', async (req, res) => {
         itemValues
       );
     }
+    // Clear user's cart after successful order
+    await db.execute('DELETE FROM carts WHERE userId = ?', [userId]);
 
     res.status(201).json({ success: true, orderId: newOrderId });
   } catch (err) {
