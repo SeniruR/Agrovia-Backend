@@ -607,26 +607,32 @@ class CropPost {
   
 
   static async updateById(id, farmerId, fields) {
-    // Build dynamic SET clause
+    // Build dynamic SET clause for MySQL
     const setClause = [];
     const values = [];
-    let idx = 1;
     for (const [key, value] of Object.entries(fields)) {
-      setClause.push(`${key} = $${idx++}`);
+      setClause.push(`${key} = ?`);
       values.push(value);
     }
     if (setClause.length === 0) return false;
 
+    // Add id and farmerId for WHERE clause
     values.push(id, farmerId);
 
-    const query = `
+    const updateQuery = `
       UPDATE crop_posts
       SET ${setClause.join(', ')}
-      WHERE id = $${idx++} AND farmer_id = $${idx}
-      RETURNING *;
+      WHERE id = ? AND farmer_id = ?
     `;
-    const { rows } = await pool.query(query, values);
-    return rows[0];
+    const [result] = await pool.execute(updateQuery, values);
+    if (result.affectedRows === 0) return null;
+
+    // Fetch the updated row
+    const [rows] = await pool.execute(
+      'SELECT * FROM crop_posts WHERE id = ? AND farmer_id = ?',
+      [id, farmerId]
+    );
+    return rows[0] || null;
   }
 }
 
