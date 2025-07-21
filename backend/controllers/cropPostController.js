@@ -610,6 +610,57 @@ static async updateCropPostStatus(req, res) {
 }
 
 
+  static async updateCropPost(req, res) {
+    try {
+      const cropPostId = req.params.id;
+      const farmerId = req.user.id; // assuming user is attached by authenticate middleware
+
+      // Gather fields from body (handle both JSON and multipart/form-data)
+      const updateFields = {
+        crop_name: req.body.crop_name,
+        crop_category: req.body.crop_category,
+        variety: req.body.variety,
+        quantity: req.body.quantity,
+        unit: req.body.unit,
+        price_per_unit: req.body.price_per_unit,
+        minimum_quantity_bulk: req.body.minimum_quantity_bulk,
+        harvest_date: req.body.harvest_date,
+        expiry_date: req.body.expiry_date,
+        location: req.body.location,
+        district: req.body.district,
+        description: req.body.description,
+        organic_certified: req.body.organic_certified,
+        pesticide_free: req.body.pesticide_free,
+        freshly_harvested: req.body.freshly_harvested,
+        contact_number: req.body.contact_number,
+        email: req.body.email,
+        status: req.body.status,
+        updated_at: new Date()
+      };
+
+      // Remove undefined fields (only update provided fields)
+      Object.keys(updateFields).forEach(key => {
+        if (updateFields[key] === undefined) delete updateFields[key];
+      });
+
+      // Update crop post in DB
+      const updated = await CropPost.updateById(cropPostId, farmerId, updateFields);
+
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Crop post not found or not authorized' });
+      }
+
+      res.json({ success: true, message: 'Crop post updated successfully' });
+    } catch (error) {
+      console.error('❌ Update crop post error:', error);
+      res.status(500).json({ success: false, message: 'Failed to update crop post', error: error.message });
+    }
+  }
 }
+
+
+
+
+
 
 module.exports = CropPostController;

@@ -604,6 +604,41 @@ class CropPost {
       throw error;
     }
   }
+  
+
+  static async updateById(id, farmerId, fields) {
+    // Always set status to 'active' after edit
+  fields.status = 'active';
+    // Build dynamic SET clause for MySQL
+    const setClause = [];
+    const values = [];
+    for (const [key, value] of Object.entries(fields)) {
+      setClause.push(`${key} = ?`);
+      values.push(value);
+    }
+    if (setClause.length === 0) return false;
+
+    // Add id and farmerId for WHERE clause
+    values.push(id, farmerId);
+
+    const updateQuery = `
+      UPDATE crop_posts
+      SET ${setClause.join(', ')}
+      WHERE id = ? AND farmer_id = ?
+    `;
+    const [result] = await pool.execute(updateQuery, values);
+    if (result.affectedRows === 0) return null;
+
+    // Fetch the updated row
+    const [rows] = await pool.execute(
+      'SELECT * FROM crop_posts WHERE id = ? AND farmer_id = ?',
+      [id, farmerId]
+    );
+    return rows[0] || null;
+  }
 }
+
+
+
 
 module.exports = CropPost;
