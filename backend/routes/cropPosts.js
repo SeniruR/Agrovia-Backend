@@ -39,7 +39,17 @@ router.get('/user/my-posts',
   CropPostController.getUserCropPosts
 );
 
+
 router.put('/:id',
+  authenticate,
+  authorize(['farmer']),
+  cropImageUpload.array('images', 5),
+  validateCropPostUpdate,
+  CropPostController.updateCropPost
+);
+
+// PATCH route for partial crop post updates
+router.patch('/:id',
   authenticate,
   authorize(['farmer']),
   cropImageUpload.array('images', 5),
