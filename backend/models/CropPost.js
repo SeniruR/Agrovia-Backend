@@ -607,6 +607,8 @@ class CropPost {
   
 
   static async updateById(id, farmerId, fields) {
+    // Always set status to 'active' after edit
+  fields.status = 'active';
     // Build dynamic SET clause for MySQL
     const setClause = [];
     const values = [];
