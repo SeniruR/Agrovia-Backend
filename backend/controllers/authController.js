@@ -263,7 +263,28 @@ const registerBuyer = async (req, res, next) => {
       payment_offer
     });
 
-    res.status(201).json({ success: true, message: 'Buyer registered successfully' });
+    // Get created user
+    const newUser = await User.findById(userId);
+    const sanitizedUser = sanitizeUser(newUser);
+
+    // Always provide a default image URL if profile_image is missing/null
+    if (!sanitizedUser.profile_image) {
+      sanitizedUser.profile_image = 'https://via.placeholder.com/128x128/4ade80/ffffff?text=👤';
+    }
+
+    // Generate token
+    const token = generateToken({
+      userId: newUser.id,
+      email: newUser.email,
+      role: newUser.role
+    });
+
+    res.status(201).json(
+      formatResponse(true, 'Buyer registered successfully', {
+        user: sanitizedUser,
+        token
+      })
+    );
   } catch (error) {
     next(error);
   }
@@ -370,6 +391,10 @@ const registerFarmer = async (req, res, next) => {
       role: newUser.role
     });
 
+    // Always provide a default image URL if profile_image is missing/null
+    if (!sanitizedUser.profile_image) {
+      sanitizedUser.profile_image = 'https://via.placeholder.com/128x128/4ade80/ffffff?text=👤';
+    }
     res.status(201).json(
       formatResponse(true, 'Farmer registered successfully', {
         user: sanitizedUser,
