@@ -24,6 +24,9 @@ router.put('/:id', upload.array('attachments', 5), cropComplaintController.updat
 // Admin: Add or update reply for a complaint
 router.put('/:id/reply', cropComplaintController.addReply);
 
+// Admin: Deactivate farmer account from crop complaint
+router.put('/:id/deactivate-farmer', cropComplaintController.deactivateFarmer);
+
 // Public: Delete a complaint
 router.delete('/:id', cropComplaintController.deleteComplaint);
 
