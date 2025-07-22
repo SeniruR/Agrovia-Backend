@@ -133,17 +133,83 @@ class UserController {
       if (typeof is_active === 'undefined') {
         return res.status(400).json({ success: false, message: 'is_active is required' });
       }
+      
+      // Update users table
       const query = 'UPDATE users SET is_active = ? WHERE id = ?';
       const [result] = await pool.execute(query, [is_active, userId]);
       if (result.affectedRows === 0) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
+
+      // Handle disable_accounts table
+      if (is_active === 0 || is_active === '0') {
+        // User is being suspended - insert/update disable_accounts with case_id = 1 (admin suspension)
+        try {
+          // First, remove any existing entries for this user
+          await pool.execute('DELETE FROM disable_accounts WHERE user_id = ?', [userId]);
+          // Insert new entry with case_id = 1 for admin suspension
+          await pool.execute(
+            'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 1, NOW())',
+            [userId]
+          );
+        } catch (disableErr) {
+          console.error('Failed to update disable_accounts:', disableErr);
+          // Don't fail the main operation for this
+        }
+      } else if (is_active === 1 || is_active === '1') {
+        // User is being activated - remove from disable_accounts
+        try {
+          await pool.execute('DELETE FROM disable_accounts WHERE user_id = ?', [userId]);
+        } catch (disableErr) {
+          console.error('Failed to remove from disable_accounts:', disableErr);
+          // Don't fail the main operation for this
+        }
+      }
+
       res.json({ success: true, message: 'User status updated successfully' });
     } catch (error) {
       console.error('❌ Update user active status error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to update user status',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+  
+  // Suspend user with specific reason (admin action)
+  static async suspendUser(req, res) {
+    try {
+      const userId = req.params.id;
+      const { reason } = req.body; // Optional reason for suspension
+      
+      // Update users table to set is_active = 0
+      const query = 'UPDATE users SET is_active = 0 WHERE id = ?';
+      const [result] = await pool.execute(query, [userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // Handle disable_accounts table - use case_id = 1 for admin suspension
+      try {
+        // First, remove any existing entries for this user
+        await pool.execute('DELETE FROM disable_accounts WHERE user_id = ?', [userId]);
+        // Insert new entry with case_id = 1 for admin suspension
+        await pool.execute(
+          'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 1, NOW())',
+          [userId]
+        );
+      } catch (disableErr) {
+        console.error('Failed to update disable_accounts:', disableErr);
+        // Don't fail the main operation for this
+      }
+
+      res.json({ success: true, message: 'User suspended successfully' });
+    } catch (error) {
+      console.error('❌ Suspend user error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to suspend user',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       });
     }

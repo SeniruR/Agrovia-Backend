@@ -25,6 +25,9 @@ router.get('/:id/farmer-details', UserController.getFarmerDetailsByUserId);
 // Update user active status (activate/suspend)
 router.put('/:id/active', UserController.updateUserActiveStatus);
 
+// Suspend user with reason (admin action)
+router.put('/:id/suspend', UserController.suspendUser);
+
 // Get all users (admin)
 router.get('/all', UserController.getAllUsers);
 
