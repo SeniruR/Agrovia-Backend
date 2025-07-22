@@ -18,7 +18,7 @@ router.get('/', transportComplaintController.getAllComplaints);
 router.get('/:id', transportComplaintController.getComplaintById);
 
 // Public: Update a complaint
-router.put('/:id', transportComplaintController.updateComplaint);
+router.put('/:id', upload.array('attachments', 5), transportComplaintController.updateComplaint);
 
 // Public: Delete a complaint
 router.delete('/:id', transportComplaintController.deleteComplaint);

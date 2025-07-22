@@ -1,6 +1,68 @@
 const { pool } = require('../config/database');
 
 class UserController {
+  // GET /users?userType=1,1.1&search=NAME - search users by type and name (for farmer search)
+  static async searchUsers(req, res) {
+    try {
+      let { userType, search } = req.query;
+      let types = [];
+      if (userType) {
+        types = userType.split(',').map(t => t.trim());
+      } else {
+        types = ['1', '1.1']; // default to farmer types
+      }
+      let sql = 'SELECT id, full_name, district, phone_number FROM users WHERE user_type IN (' + types.map(() => '?').join(',') + ')';
+      let params = [...types];
+      if (search && search.length > 0) {
+        sql += ' AND full_name LIKE ?';
+        params.push(`%${search}%`);
+      }
+      sql += ' ORDER BY full_name LIMIT 20';
+      const [rows] = await pool.execute(sql, params);
+      res.json(rows);
+    } catch (err) {
+      console.error('User search error:', err);
+      res.status(500).json({ error: 'Failed to search users' });
+    }
+  }
+  // PATCH /users/:id/farmer-organization - update organization_id in farmer_details
+  static async updateFarmerOrganization(req, res) {
+    try {
+      const userId = req.params.id;
+      const { organization_id } = req.body;
+      if (!organization_id) {
+        return res.status(400).json({ success: false, message: 'organization_id is required' });
+      }
+      const query = 'UPDATE farmer_details SET organization_id = ? WHERE user_id = ?';
+      const [result] = await require('../config/database').pool.execute(query, [organization_id, userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Farmer details not found or organization_id not changed' });
+      }
+      return res.json({ success: true, message: 'Farmer organization_id updated successfully' });
+    } catch (err) {
+      console.error('Error updating farmer_details organization_id:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
+  // PATCH /users/:id/organization - update user's organization_id
+  static async updateUserOrganization(req, res) {
+    try {
+      const userId = req.params.id;
+      const { organization_id } = req.body;
+      if (!organization_id) {
+        return res.status(400).json({ success: false, message: 'organization_id is required' });
+      }
+      const query = 'UPDATE users SET organization_id = ? WHERE id = ?';
+      const [result] = await pool.execute(query, [organization_id, userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'User not found or organization_id not changed' });
+      }
+      return res.json({ success: true, message: 'User organization_id updated successfully' });
+    } catch (err) {
+      console.error('Error updating user organization_id:', err);
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  }
   // Get user profile image
   static async getProfileImage(req, res) {
     try {
@@ -71,17 +133,83 @@ class UserController {
       if (typeof is_active === 'undefined') {
         return res.status(400).json({ success: false, message: 'is_active is required' });
       }
+      
+      // Update users table
       const query = 'UPDATE users SET is_active = ? WHERE id = ?';
       const [result] = await pool.execute(query, [is_active, userId]);
       if (result.affectedRows === 0) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
+
+      // Handle disable_accounts table
+      if (is_active === 0 || is_active === '0') {
+        // User is being suspended - insert/update disable_accounts with case_id = 1 (admin suspension)
+        try {
+          // First, remove any existing entries for this user
+          await pool.execute('DELETE FROM disable_accounts WHERE user_id = ?', [userId]);
+          // Insert new entry with case_id = 1 for admin suspension
+          await pool.execute(
+            'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 1, NOW())',
+            [userId]
+          );
+        } catch (disableErr) {
+          console.error('Failed to update disable_accounts:', disableErr);
+          // Don't fail the main operation for this
+        }
+      } else if (is_active === 1 || is_active === '1') {
+        // User is being activated - remove from disable_accounts
+        try {
+          await pool.execute('DELETE FROM disable_accounts WHERE user_id = ?', [userId]);
+        } catch (disableErr) {
+          console.error('Failed to remove from disable_accounts:', disableErr);
+          // Don't fail the main operation for this
+        }
+      }
+
       res.json({ success: true, message: 'User status updated successfully' });
     } catch (error) {
       console.error('❌ Update user active status error:', error);
       res.status(500).json({
         success: false,
         message: 'Failed to update user status',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+    }
+  }
+  
+  // Suspend user with specific reason (admin action)
+  static async suspendUser(req, res) {
+    try {
+      const userId = req.params.id;
+      const { reason } = req.body; // Optional reason for suspension
+      
+      // Update users table to set is_active = 0
+      const query = 'UPDATE users SET is_active = 0 WHERE id = ?';
+      const [result] = await pool.execute(query, [userId]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      // Handle disable_accounts table - use case_id = 1 for admin suspension
+      try {
+        // First, remove any existing entries for this user
+        await pool.execute('DELETE FROM disable_accounts WHERE user_id = ?', [userId]);
+        // Insert new entry with case_id = 1 for admin suspension
+        await pool.execute(
+          'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 1, NOW())',
+          [userId]
+        );
+      } catch (disableErr) {
+        console.error('Failed to update disable_accounts:', disableErr);
+        // Don't fail the main operation for this
+      }
+
+      res.json({ success: true, message: 'User suspended successfully' });
+    } catch (error) {
+      console.error('❌ Suspend user error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to suspend user',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       });
     }

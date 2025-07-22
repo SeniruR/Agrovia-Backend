@@ -51,14 +51,17 @@ const authenticate = async (req, res, next) => {
         });
       }
       // Add user to request object with role mapping
-      const userTypeMap = {
-        '1': 'farmer',
-        '2': 'buyer',
-        '3': 'shop_owner',
-        '4': 'transporter',
-        '5': 'admin',
-        '6': 'committee_member'
-      };
+  const userTypeMap = {
+    '0': 'admin',
+    '1': 'farmer',
+    '1.1': 'farmer', // Farmer (Organizer)
+    '2': 'buyer',
+    '3': 'shop_owner',
+    '4': 'transporter',
+    '5': 'moderator',
+    '5.1': 'main_moderator',
+    '6': 'committee_member'
+  };
       user.role = userTypeMap[user.user_type?.toString()] || 'unknown';
       req.user = user;
       next();

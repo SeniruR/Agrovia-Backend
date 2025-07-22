@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -16,8 +17,15 @@ router.get('/', cropComplaintController.getAllComplaints);
 // Public: Get a single complaint by ID
 router.get('/:id', cropComplaintController.getComplaintById);
 
+
 // Public: Update a complaint
 router.put('/:id', upload.array('attachments', 5), cropComplaintController.updateComplaint);
+
+// Admin: Add or update reply for a complaint
+router.put('/:id/reply', cropComplaintController.addReply);
+
+// Admin: Deactivate farmer account from crop complaint
+router.put('/:id/deactivate-farmer', cropComplaintController.deactivateFarmer);
 
 // Public: Delete a complaint
 router.delete('/:id', cropComplaintController.deleteComplaint);

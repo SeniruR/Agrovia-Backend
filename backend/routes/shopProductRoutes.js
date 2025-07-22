@@ -22,6 +22,10 @@ router.get('/my-shop',
   authenticate, // This should add req.user
   shopProductController.getMyShopProducts
 );
+router.get('/my-shop-view', 
+  authenticate, // This should add req.user
+  shopProductController.getAllViewMyShopProducts
+);
 router.get('/', shopProductController.getAllShopProducts);
 //router.get('/:shopitemid', shopController.getItemById);
 router.delete('/:shopitemid', shopProductController.deleteShopProduct);

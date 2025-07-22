@@ -68,19 +68,26 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
       await pool.query(`UPDATE users SET ${userSet} WHERE id = ?`, [...userVals, userId]);
     }
 
-    // Check if farmer_details exists
-    const [rows] = await pool.query('SELECT user_id FROM farmer_details WHERE user_id = ?', [userId]);
-    if (rows.length > 0) {
-      // Update
-      const farmerSet = Object.keys(farmerFields).map(f => `${f} = ?`).join(', ');
-      const farmerVals = Object.values(farmerFields);
-      await pool.query(`UPDATE farmer_details SET ${farmerSet} WHERE user_id = ?`, [...farmerVals, userId]);
-    } else {
-      // Insert
-      await pool.query(
-        `INSERT INTO farmer_details (user_id, ${Object.keys(farmerFields).join(', ')}) VALUES (?, ${Object.keys(farmerFields).map(() => '?').join(', ')})`,
-        [userId, ...Object.values(farmerFields)]
-      );
+    // Handle farmer_details only if there are fields to update/insert
+    if (Object.keys(farmerFields).length > 0) {
+      const [rows] = await pool.query('SELECT user_id FROM farmer_details WHERE user_id = ?', [userId]);
+      if (rows.length > 0) {
+        // Update existing farmer_details
+        const farmerSet = Object.keys(farmerFields).map(f => `${f} = ?`).join(', ');
+        const farmerVals = Object.values(farmerFields);
+        await pool.query(
+          `UPDATE farmer_details SET ${farmerSet} WHERE user_id = ?`,
+          [...farmerVals, userId]
+        );
+      } else {
+        // Insert new farmer_details
+        const fields = Object.keys(farmerFields);
+        const placeholders = fields.map(() => '?').join(', ');
+        await pool.query(
+          `INSERT INTO farmer_details (user_id, ${fields.join(', ')}) VALUES (?, ${placeholders})`,
+          [userId, ...Object.values(farmerFields)]
+        );
+      }
     }
 
     // Fetch and return the updated profile
@@ -353,7 +360,7 @@ const registerFarmer = async (req, res, next) => {
       address: req.body.address || null,
       profile_image,
       profile_image_mime,
-      user_type: 1,
+      user_type: req.body.user_type || 1,
       birth_date: req.body.birth_date || null,
       description: req.body.description || null,
       division_gramasewa_number: req.body.division_gramasewa_number || null,
@@ -371,9 +378,11 @@ const registerFarmer = async (req, res, next) => {
 
     // After user is created, insert into disable_accounts with case_id = 2
     try {
+      // If user_type is '1.1', use case_id = 3, else 2
+      const caseId = (userData.user_type === '1.1') ? 3 : 2;
       await require('../config/database').pool.execute(
         'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
-        [userId, 2]
+        [userId, caseId]
       );
     } catch (disableErr) {
       console.error('Failed to insert into disable_accounts:', disableErr);

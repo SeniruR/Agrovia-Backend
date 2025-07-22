@@ -44,7 +44,7 @@ class User {
       const userId = userResult.insertId;
       console.log('User insert result:', userResult);
 
-        if (user_type === 1) {
+        if (user_type === 1 || user_type === '1' || user_type === 1.1 || user_type === '1.1') {
           const farmerQuery = `
             INSERT INTO farmer_details (
               user_id, land_size, description,

@@ -1,5 +1,31 @@
 const Joi = require('joi');
 
+// Sanitize FormData string values to correct types
+function sanitizeUpdateBody(body) {
+  const booleanFields = ['organic_certified', 'pesticide_free', 'freshly_harvested'];
+  const numberFields = ['quantity', 'price_per_unit', 'minimum_quantity_bulk'];
+  const dateFields = ['harvest_date', 'expiry_date'];
+
+  for (const key in body) {
+    if (booleanFields.includes(key)) {
+      if (body[key] === '1' || body[key] === 1 || body[key] === true || body[key] === 'true') body[key] = true;
+      else if (body[key] === '0' || body[key] === 0 || body[key] === false || body[key] === 'false') body[key] = false;
+    }
+    if (numberFields.includes(key)) {
+      if (body[key] === '' || body[key] === null || body[key] === undefined) {
+        body[key] = undefined;
+      } else {
+        body[key] = Number(body[key]);
+      }
+    }
+    if (dateFields.includes(key)) {
+      if (body[key] === '' || body[key] === null || body[key] === undefined) {
+        body[key] = undefined;
+      }
+    }
+  }
+}
+
 const cropPostSchema = Joi.object({
   crop_category: Joi.string().valid('vegetables', 'grains').required(),
   crop_name: Joi.string().min(2).max(100).required(),
@@ -41,15 +67,14 @@ const updateCropPostSchema = Joi.object({
   pesticide_free: Joi.boolean().optional(),
   freshly_harvested: Joi.boolean().optional(),
   status: Joi.string().valid('pending', 'approved', 'rejected', 'sold', 'available').optional()
-});
+}).unknown(true); // <-- allow unknown fields
 
 const validateCropPost = (req, res, next) => {
-  // Make validation optional for testing
   if (process.env.NODE_ENV === 'development') {
     console.log('⚠️  Validation bypassed for development');
     return next();
   }
-  
+  sanitizeUpdateBody(req.body);
   const { error } = cropPostSchema.validate(req.body);
   if (error) {
     return res.status(400).json({
@@ -65,6 +90,7 @@ const validateCropPost = (req, res, next) => {
 };
 
 const validateCropPostUpdate = (req, res, next) => {
+  sanitizeUpdateBody(req.body);
   const { error } = updateCropPostSchema.validate(req.body);
   if (error) {
     return res.status(400).json({

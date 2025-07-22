@@ -16,6 +16,9 @@ const { testConnection } = require('./config/database');
 // Import routes
 const routes = require('./routes');
 
+// Import order routes
+const orderRoutes = require('./routes/orders');
+
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,7 +30,9 @@ app.use(helmet());
 
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 // CORS configuration
 // app.use(cors({
@@ -56,6 +61,7 @@ app.use('/api/v1/shop-products', shopProductRoutes);
 
 // API routes
 app.use('/api/v1', routes);
+app.use('/api/v1/orders', orderRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
