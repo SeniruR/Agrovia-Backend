@@ -16,12 +16,13 @@ class CropPostController {
       }
       res.set('Access-Control-Allow-Origin', '*');
       res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.set('Content-Type', 'image/jpeg'); // You may want to store and use the real mimetype
+      res.set('Content-Type', 'image/jpeg');
       res.send(image.image);
     } catch (err) {
       res.status(500).send('Error retrieving image');
     }
   }
+
   // Create new crop post
   static async createCropPost(req, res) {
     try {
@@ -409,55 +410,78 @@ class CropPostController {
   // Update crop post
   static async updateCropPost(req, res) {
     try {
-      const { id } = req.params;
-      const updateData = { ...req.body };
+      const cropPostId = req.params.id;
+      const farmerId = req.user.id;
 
-      // Handle new uploaded images
-      if (req.files && req.files.length > 0) {
-        updateData.images = req.files.map(file => ({
-          filename: file.filename,
-          originalname: file.originalname,
-          path: `/uploads/crop-images/${file.filename}`,
-          size: file.size
-        }));
-      }
+      // Gather fields from body
+      const updateFields = {
+        crop_name: req.body.crop_name,
+        crop_category: req.body.crop_category,
+        variety: req.body.variety,
+        quantity: req.body.quantity,
+        unit: req.body.unit,
+        price_per_unit: req.body.price_per_unit,
+        minimum_quantity_bulk: req.body.minimum_quantity_bulk,
+        harvest_date: req.body.harvest_date,
+        expiry_date: req.body.expiry_date,
+        location: req.body.location,
+        district: req.body.district,
+        description: req.body.description,
+        organic_certified: req.body.organic_certified,
+        pesticide_free: req.body.pesticide_free,
+        freshly_harvested: req.body.freshly_harvested,
+        contact_number: req.body.contact_number,
+        email: req.body.email,
+        status: req.body.status || 'active', // Default to active if not provided
+        updated_at: new Date()
+      };
 
-      const fields = [];
-      const values = [];
-
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] !== undefined) {
-          if (key === 'images') {
-            fields.push(`${key} = ?`);
-            values.push(JSON.stringify(updateData[key]));
-          } else {
-            fields.push(`${key} = ?`);
-            values.push(updateData[key]);
-          }
-        }
+      // Remove undefined fields
+      Object.keys(updateFields).forEach(key => {
+        if (updateFields[key] === undefined) delete updateFields[key];
       });
 
-      if (fields.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'No fields to update'
+      // --- IMAGE HANDLING ---
+      // Remove images (handle both array and single value)
+      let removedImages = req.body['removedImages[]'] || req.body.removedImages;
+if (removedImages) {
+  if (!Array.isArray(removedImages)) removedImages = [removedImages];
+  for (const imgId of removedImages) {
+    await CropPostImage.deleteById(imgId, cropPostId);
+  }
+}
+
+// Add new images (memoryStorage: use file.buffer)
+if (req.files && req.files.length > 0) {
+  for (const file of req.files) {
+    await CropPostImage.insert(cropPostId, file.buffer);
+  }
+}
+      // --- END IMAGE HANDLING ---
+
+      // Update crop post in DB
+      const updated = await CropPost.updateById(cropPostId, farmerId, updateFields);
+
+      if (!updated) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Crop post not found or not authorized' 
         });
       }
 
-      values.push(id);
-      const query = `UPDATE crop_posts SET ${fields.join(', ')} WHERE id = ?`;
-      const [result] = await pool.execute(query, values);
+      // Get updated post with images to return
+      const updatedPost = await CropPost.getById(cropPostId);
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      const images = await CropPostImage.getByPostId(cropPostId);
+      const imageUrls = images.map(img => `${baseUrl}/api/v1/crop-posts/${cropPostId}/images/${img.id}`);
 
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Crop post not found'
-        });
-      }
-
-      res.json({
-        success: true,
-        message: 'Crop post updated successfully'
+      res.json({ 
+        success: true, 
+        message: 'Crop post updated successfully',
+        data: {
+          ...updatedPost,
+          images: imageUrls
+        }
       });
     } catch (error) {
       console.error('❌ Update crop post error:', error);
@@ -468,7 +492,6 @@ class CropPostController {
       });
     }
   }
-
   // Delete crop post
   static async deleteCropPost(req, res) {
     try {
@@ -534,133 +557,78 @@ class CropPostController {
     }
   }
 
-  // Update crop post status (admin only)
   // Update crop post status (admin or post owner farmer only)
-// Update crop post status (admin or post owner farmer only)
-static async updateCropPostStatus(req, res) {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    const user = req.user;
+  static async updateCropPostStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const user = req.user;
 
-    // Allow 'deleted' as a valid status
-    const validStatuses = ['pending', 'approved', 'rejected', 'sold', 'available', 'deleted'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status value'
-      });
-    }
-
-    // Fetch the post to check ownership
-    const [rows] = await pool.execute('SELECT farmer_id FROM crop_posts WHERE id = ?', [id]);
-    if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Crop post not found' });
-    }
-    const post = rows[0];
-
-    // 🔍 Debug logging for troubleshooting permissions
-    console.log('🔒 Permission Debug:', {
-      userId: user?.id,
-      userRole: user?.role,
-      postFarmerId: post.farmer_id,
-      requestedStatus: status
-    });
-
-    // ✅ Permission check
-    if (
-      (user.role === 'admin') ||
-      (user.role === 'farmer' && String(user.id) === String(post.farmer_id) && status === 'deleted')
-    ) {
-      const query = 'UPDATE crop_posts SET status = ? WHERE id = ?';
-      const [result] = await pool.execute(query, [status, id]);
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
+      // Allow 'deleted' as a valid status
+      const validStatuses = ['pending', 'approved', 'rejected', 'sold', 'available', 'deleted'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
           success: false,
-          message: 'Crop post not found'
+          message: 'Invalid status value'
         });
       }
 
-      return res.json({
-        success: true,
-        message: `Crop post status updated to ${status} successfully`
-      });
-    } else {
-      console.warn('❌ Insufficient permissions:', {
+      // Fetch the post to check ownership
+      const [rows] = await pool.execute('SELECT farmer_id FROM crop_posts WHERE id = ?', [id]);
+      if (rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Crop post not found' });
+      }
+      const post = rows[0];
+
+      // 🔍 Debug logging for troubleshooting permissions
+      console.log('🔒 Permission Debug:', {
         userId: user?.id,
         userRole: user?.role,
-        postOwnerId: post.farmer_id,
-        attemptedStatus: status
+        postFarmerId: post.farmer_id,
+        requestedStatus: status
       });
 
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient permissions'
-      });
-    }
-  } catch (error) {
-    console.error('❌ Update crop post status error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update crop post status',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-}
+      // ✅ Permission check
+      if (
+        (user.role === 'admin') ||
+        (user.role === 'farmer' && String(user.id) === String(post.farmer_id) && status === 'deleted')
+      ) {
+        const query = 'UPDATE crop_posts SET status = ? WHERE id = ?';
+        const [result] = await pool.execute(query, [status, id]);
 
+        if (result.affectedRows === 0) {
+          return res.status(404).json({
+            success: false,
+            message: 'Crop post not found'
+          });
+        }
 
-  static async updateCropPost(req, res) {
-    try {
-      const cropPostId = req.params.id;
-      const farmerId = req.user.id; // assuming user is attached by authenticate middleware
+        return res.json({
+          success: true,
+          message: `Crop post status updated to ${status} successfully`
+        });
+      } else {
+        console.warn('❌ Insufficient permissions:', {
+          userId: user?.id,
+          userRole: user?.role,
+          postOwnerId: post.farmer_id,
+          attemptedStatus: status
+        });
 
-      // Gather fields from body (handle both JSON and multipart/form-data)
-      const updateFields = {
-        crop_name: req.body.crop_name,
-        crop_category: req.body.crop_category,
-        variety: req.body.variety,
-        quantity: req.body.quantity,
-        unit: req.body.unit,
-        price_per_unit: req.body.price_per_unit,
-        minimum_quantity_bulk: req.body.minimum_quantity_bulk,
-        harvest_date: req.body.harvest_date,
-        expiry_date: req.body.expiry_date,
-        location: req.body.location,
-        district: req.body.district,
-        description: req.body.description,
-        organic_certified: req.body.organic_certified,
-        pesticide_free: req.body.pesticide_free,
-        freshly_harvested: req.body.freshly_harvested,
-        contact_number: req.body.contact_number,
-        email: req.body.email,
-        status: req.body.status,
-        updated_at: new Date()
-      };
-
-      // Remove undefined fields (only update provided fields)
-      Object.keys(updateFields).forEach(key => {
-        if (updateFields[key] === undefined) delete updateFields[key];
-      });
-
-      // Update crop post in DB
-      const updated = await CropPost.updateById(cropPostId, farmerId, updateFields);
-
-      if (!updated) {
-        return res.status(404).json({ success: false, message: 'Crop post not found or not authorized' });
+        return res.status(403).json({
+          success: false,
+          message: 'Insufficient permissions'
+        });
       }
-
-      res.json({ success: true, message: 'Crop post updated successfully' });
     } catch (error) {
-      console.error('❌ Update crop post error:', error);
-      res.status(500).json({ success: false, message: 'Failed to update crop post', error: error.message });
+      console.error('❌ Update crop post status error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update crop post status',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
     }
   }
 }
-
-
-
-
-
 
 module.exports = CropPostController;
