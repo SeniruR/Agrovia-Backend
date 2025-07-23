@@ -44,8 +44,12 @@ app.use(cors({
 //   allowedHeaders: ['Content-Type', 'Authorization']
 // }));
 
-// Rate limiting
-app.use(generalLimiter);
+// Rate limiting: skip profile routes to avoid excessive 429 errors
+app.use((req, res, next) => {
+  const skipPaths = ['/api/v1/users/profile', '/api/v1/auth/profile'];
+  if (skipPaths.includes(req.path)) return next();
+  return generalLimiter(req, res, next);
+});
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
