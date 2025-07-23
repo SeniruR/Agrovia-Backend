@@ -89,8 +89,35 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
         );
       }
     }
+    
+    // Handle buyer_details only if user is a buyer and fields provided
+    const buyerFields = {};
+    if (data.company_name !== undefined || data.companyName !== undefined) buyerFields.company_name = data.company_name || data.companyName;
+    if (data.company_type !== undefined || data.companyType !== undefined) buyerFields.company_type = data.company_type || data.companyType;
+    if (data.company_address !== undefined || data.companyAddress !== undefined) buyerFields.company_address = data.company_address || data.companyAddress;
+    if (data.payment_offer !== undefined || data.paymentOffer !== undefined) buyerFields.payment_offer = data.payment_offer || data.paymentOffer;
+    if (Object.keys(buyerFields).length > 0) {
+      const [rows] = await pool.query('SELECT user_id FROM buyer_details WHERE user_id = ?', [userId]);
+      if (rows.length > 0) {
+        // Update existing buyer_details
+        const buyerSet = Object.keys(buyerFields).map(f => `${f} = ?`).join(', ');
+        const buyerVals = Object.values(buyerFields);
+        await pool.query(
+          `UPDATE buyer_details SET ${buyerSet} WHERE user_id = ?`,
+          [...buyerVals, userId]
+        );
+      } else {
+        // Insert new buyer_details
+        const fields = Object.keys(buyerFields);
+        const placeholders = fields.map(() => '?').join(', ');
+        await pool.query(
+          `INSERT INTO buyer_details (user_id, ${fields.join(', ')}) VALUES (?, ${placeholders})`,
+          [userId, ...Object.values(buyerFields)]
+        );
+      }
+    }
 
-    // Fetch and return the updated profile
+    // Fetch and return the updated profile with associated details
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found after update' });
@@ -301,6 +328,7 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const { generateToken } = require('../middleware/auth');
 const FarmerDetails = require('../models/FarmerDetails');
+const BuyerDetails = require('../models/Buyer');
 
 // Register farmer
 const registerFarmer = async (req, res, next) => {
@@ -579,7 +607,7 @@ const getProfile = async (req, res, next) => {
   }
 };
 
-// Get current user profile with farmer details
+// Get current user profile with associated details
 const getProfileWithFarmerDetails = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
@@ -587,14 +615,21 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     let farmerDetails = null;
-    if (user.user_type === '1' || user.user_type === '1.1') { // 1 or 1.1 = farmer
+    let buyerDetails = null;
+    // Fetch farmer details if applicable
+    if (user.user_type === '1' || user.user_type === '1.1') {
       farmerDetails = await FarmerDetails.findByUserId(user.id);
     }
-    res.json({
+    // Fetch buyer details if applicable
+    if (user.user_type === '2') {
+      buyerDetails = await BuyerDetails.findByUserId(user.id);
+    }
+    return res.json({
       success: true,
       user: {
         ...sanitizeUser(user),
-        farmer_details: farmerDetails
+        farmer_details: farmerDetails,
+        buyer_details: buyerDetails
       }
     });
   } catch (error) {
