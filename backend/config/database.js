@@ -106,6 +106,31 @@ const createTables = async (connection) => {
       )
     `);
 
+    // Shop details table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS shop_details (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT UNSIGNED NOT NULL,
+        shop_name VARCHAR(255) NOT NULL,
+        business_registration_number VARCHAR(100),
+        shop_address TEXT,
+        shop_phone_number VARCHAR(20),
+        shop_email VARCHAR(255),
+        shop_description TEXT,
+        shop_category VARCHAR(100),
+        operating_hours VARCHAR(100),
+        opening_days VARCHAR(255),
+        delivery_areas TEXT,
+        shop_license BLOB,
+        shop_image BLOB,
+        shop_image_mime VARCHAR(45),
+        shop_license_mime VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for better performance (MySQL compatible way)
     try {
       await connection.execute(`CREATE INDEX idx_users_email ON users(email)`);

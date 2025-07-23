@@ -38,6 +38,8 @@ router.use('/farmers', farmerRoutes);
 router.use('/shop-products', shopProductRoutes);
 router.use('/crop-posts', cropPostRoutes);
 router.use('/users', userRoutes);
+// Shop search endpoint for live-search dropdowns
+router.use('/shops', require('./shops'));
 router.use('/shop-complaints', shopComplaintRoutes);
 router.use('/transporters', transporterRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);

@@ -80,7 +80,14 @@ class CropComplaint {
 
   // Get complaint by ID
   static async findById(id) {
-    const query = 'SELECT * FROM crop_complaints WHERE id = ?';
+    // Include submitter and farmer names
+    const query = `
+      SELECT cc.*, u.full_name AS submittedByName, uf.full_name AS farmerName
+      FROM crop_complaints cc
+      LEFT JOIN users u ON cc.submitted_by = u.id
+      LEFT JOIN users uf ON cc.to_farmer = uf.id
+      WHERE cc.id = ?
+    `;
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;

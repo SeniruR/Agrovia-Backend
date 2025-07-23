@@ -10,11 +10,12 @@ exports.createComplaint = async (req, res, next) => {
       description,
       submittedBy,
       priority,
-      shopName,
+      shopId,
       location,
       category,
       orderNumber,
-      purchaseDate
+      purchaseDate,
+      userId
     } = req.body;
 
     let attachments = req.body.attachments;
@@ -45,14 +46,16 @@ exports.createComplaint = async (req, res, next) => {
     const result = await ShopComplaint.create({
       title,
       description,
-      submittedBy,
+      submittedBy: parseInt(submittedBy, 10),
       priority,
-      shopName,
+      shopId: parseInt(shopId, 10),
       location,
       category,
       orderNumber,
       purchaseDate,
-      attachments 
+      attachments,
+      // If userId isn't provided explicitly, use submittedBy as the userId
+      userId: userId ? parseInt(userId, 10) : parseInt(submittedBy, 10)
     });
     const complaintId = result.insertId;
 
