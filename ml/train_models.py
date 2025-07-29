@@ -19,10 +19,10 @@ print("\nDataset Info:")
 print(data.info())
 
 # # Limit dataset to 1000 rows for testing
-# print("Limiting dataset to 1000 rows for testing...")
-# data = data.sample(1000, random_state=42)
-# print("Dataset limited to 1000 rows.")
-print(f"Using full dataset with {len(data)} records for training...")
+print("Limiting dataset to 1000 rows for testing...")
+data = data.sample(1000, random_state=42)
+print("Dataset limited to 1000 rows.")
+# print(f"Using full dataset with {len(data)} records for training...")
 
 # Encode categorical features
 label_encoders = {}
