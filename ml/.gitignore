@@ -1,0 +1,11 @@
+crop_yield.csv
+
+#remove models
+*.pkl
+
+#remove csv
+*.csv
+
+#remove cache
+__pycache__/
+*.pyc
