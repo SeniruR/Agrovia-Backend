@@ -21,4 +21,10 @@ router.post('/:id/approve', organizationApprovalController.approveOrganization);
 // Reject organization
 router.post('/:id/reject', organizationApprovalController.rejectOrganization);
 
+// Fetch organizations (summary or detailed)
+router.get('/', organizationApprovalController.getOrganizations);
+
+// Fetch detailed data for a specific organization
+router.get('/details/:id', organizationApprovalController.getOrganizationDetails);
+
 module.exports = router;
