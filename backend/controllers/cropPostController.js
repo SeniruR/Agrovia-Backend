@@ -116,13 +116,12 @@ class CropPostController {
       let imageIds = [];
       if (req.files && req.files.length > 0) {
         for (const file of req.files) {
-          const imageBuffer = fs.readFileSync(file.path);
+          if (!file.buffer) {
+            continue; // Skip this file
+          }
+          const imageBuffer = file.buffer; // Use buffer directly
           const imageId = await CropPostImage.insert(postId, imageBuffer);
           imageIds.push(imageId);
-          // Clean up file after reading
-          fs.unlink(file.path, (err) => {
-            if (err) console.error('Error deleting file:', err);
-          });
         }
       }
 

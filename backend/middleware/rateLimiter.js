@@ -1,4 +1,6 @@
 const rateLimit = require('express-rate-limit');
+// Disable rate limits in development
+const isDev = process.env.NODE_ENV === 'development';
 
 // General rate limiting
 const generalLimiter = rateLimit({
