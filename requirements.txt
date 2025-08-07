@@ -1,0 +1,7 @@
+--only-binary :all:
+
+flask>=2.0.1
+flask-cors>=3.0.10
+numpy>=2.2.0
+scikit-learn>=1.4.0
+pandas>=2.2.0

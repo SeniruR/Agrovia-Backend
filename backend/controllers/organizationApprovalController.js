@@ -1,3 +1,6 @@
+// controllers/organizationApprovalController.js
+const OrganizationApproval = require('../models/OrganizationApproval');
+
 // Get all organizations (any status)
 exports.getAllOrganizations = async (req, res) => {
   try {
@@ -60,8 +63,6 @@ exports.getRejectedOrganizations = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching organizations.' });
   }
 };
-// controllers/organizationApprovalController.js
-const OrganizationApproval = require('../models/OrganizationApproval');
 
 // Get all pending organizations
 exports.getPendingOrganizations = async (req, res) => {
@@ -155,5 +156,77 @@ exports.getProofDocument = async (req, res) => {
     res.end(org.letter_of_proof_file);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error downloading document.' });
+  }
+};
+
+// Fetch summary or detailed data for organizations
+exports.getOrganizations = async (req, res) => {
+  try {
+    const { status, summary } = req.query;
+    let orgs;
+
+    if (status === 'approved') {
+      orgs = await OrganizationApproval.getApproved();
+    } else if (status === 'rejected') {
+      orgs = await OrganizationApproval.getRejected();
+    } else if (status === 'pending') {
+      orgs = await OrganizationApproval.getPending();
+    } else {
+      orgs = await OrganizationApproval.getAll();
+    }
+
+    if (summary === '1') {
+      // Return summary data only
+      const mapped = orgs.map(org => ({
+        id: org.id,
+        org_name: org.org_name,
+        area: org.org_area,
+        status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : 'rejected'
+      }));
+      return res.json(mapped);
+    }
+
+    // Return detailed data
+    const mapped = orgs.map(org => ({
+      id: org.id,
+      org_name: org.org_name,
+      area: org.org_area,
+      govijanasewaniladariname: org.gn_name,
+      govijanasewaniladariContact: org.gn_contactno,
+      establishedDate: org.est,
+      organizationDescription: org.org_description,
+      letterofProof: org.letter_of_proof_file,
+      is_active: org.is_active,
+      status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : 'rejected'
+    }));
+    res.json(mapped);
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error fetching organizations.' });
+  }
+};
+
+// Fetch detailed data for a specific organization
+exports.getOrganizationDetails = async (req, res) => {
+  try {
+    const orgId = req.params.id;
+    const org = await OrganizationApproval.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ success: false, message: 'Organization not found.' });
+    }
+    const detailedData = {
+      id: org.id,
+      org_name: org.org_name,
+      area: org.org_area,
+      govijanasewaniladariname: org.gn_name,
+      govijanasewaniladariContact: org.gn_contactno,
+      establishedDate: org.est,
+      organizationDescription: org.org_description,
+      letterofProof: org.letter_of_proof_file,
+      is_active: org.is_active,
+      status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : 'rejected'
+    };
+    res.json(detailedData);
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error fetching organization details.' });
   }
 };
