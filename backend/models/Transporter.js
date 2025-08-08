@@ -47,6 +47,16 @@ class Transporter {
       throw error;
     }
   }
+
+  // Get all transporters
+  static async getAll() {
+    try {
+      const [rows] = await pool.execute('SELECT * FROM transporter_details ORDER BY created_at DESC');
+      return rows;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = Transporter;
