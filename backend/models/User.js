@@ -23,20 +23,24 @@ class User {
       cultivated_crops,
       irrigation_system,
       soil_type,
-      farming_certifications
+      farming_certifications,
+      latitude,
+      longitude
     } = userData;
 
     const userQuery = `
       INSERT INTO users (
         full_name, email, password_hash, phone_number, district, nic,
-        address, profile_image, profile_image_mime, user_type, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        address, profile_image, profile_image_mime, user_type, is_active,
+        latitude, longitude
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     // Set is_active=1 for buyers (user_type=2), 0 for others
     const isActive = user_type === 2 ? 1 : 0;
     const userValues = [
       full_name, email, password_hash, phone_number, district, nic,
-      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, isActive
+      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, isActive,
+      latitude ?? null, longitude ?? null
     ];
 
     try {
