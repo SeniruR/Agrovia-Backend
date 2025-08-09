@@ -51,7 +51,7 @@ class Transporter {
   // Get all transporters
   static async getAll() {
     try {
-      const [rows] = await pool.execute('SELECT * FROM transporter_details ORDER BY created_at DESC');
+      const [rows] = await pool.execute('SELECT * FROM transporter_district_view ORDER BY transport_created_at DESC');
       return rows;
     } catch (error) {
       throw error;
