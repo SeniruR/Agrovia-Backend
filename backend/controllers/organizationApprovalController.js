@@ -1,5 +1,50 @@
+// Suspend organization
+const { sendOrganizationSuspensionEmail, sendOrganizationRemovalEmail, sendFarmerRemovalEmail } = require('../utils/notify');
+exports.suspendOrganization = async (req, res) => {
+  try {
+    const orgId = req.params.id;
+    // Only allow suspend if currently approved
+    const org = await OrganizationApproval.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ success: false, message: 'Organization not found.' });
+    }
+    if (org.is_active !== 1) {
+      return res.status(400).json({ success: false, message: 'Only approved organizations can be suspended.' });
+    }
+    // Set is_active = 2 for suspended
+    const result = await OrganizationApproval.suspend(orgId);
+    if (result.affectedRows === 0) {
+      return res.status(500).json({ success: false, message: 'Failed to suspend organization.' });
+    }
+    // Also set is_active=0 for the contact person user
+    const contactPersonId = org.org_contactperson_id;
+    let contactPerson = null;
+    if (contactPersonId) {
+      const User = require('../models/User');
+      try {
+        await User.updateActiveStatus(contactPersonId, 0);
+        contactPerson = await User.findById(contactPersonId);
+      } catch (e) {
+        // Log but don't block suspension if user update fails
+        console.error('Failed to update user is_active for contact person:', e);
+      }
+    }
+    // Send suspension email if contact person has email
+    if (contactPerson && contactPerson.email) {
+      try {
+        await sendOrganizationSuspensionEmail(contactPerson.email, contactPerson.full_name, org.org_name);
+      } catch (mailErr) {
+        console.error('Failed to send organization suspension email:', mailErr);
+      }
+    }
+    res.json({ success: true, message: 'Organization suspended.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Error suspending organization.' });
+  }
+};
 // controllers/organizationApprovalController.js
 const OrganizationApproval = require('../models/OrganizationApproval');
+const FarmerDetails = require('../models/FarmerDetails');
 
 // Get all organizations (any status)
 exports.getAllOrganizations = async (req, res) => {
@@ -91,6 +136,7 @@ exports.getPendingOrganizations = async (req, res) => {
 };
 
 // Approve organization
+const { sendOrganizationApprovalEmail } = require('../utils/notify');
 exports.approveOrganization = async (req, res) => {
   try {
     const orgId = req.params.id;
@@ -108,13 +154,23 @@ exports.approveOrganization = async (req, res) => {
     }
     // Also set is_active=1 for the contact person user
     const contactPersonId = org.org_contactperson_id;
+    let contactPerson = null;
     if (contactPersonId) {
       const User = require('../models/User');
       try {
         await User.updateActiveStatus(contactPersonId, 1);
+        contactPerson = await User.findById(contactPersonId);
       } catch (e) {
         // Log but don't block approval if user update fails
         console.error('Failed to update user is_active for contact person:', e);
+      }
+    }
+    // Send approval email if contact person has email
+    if (contactPerson && contactPerson.email) {
+      try {
+        await sendOrganizationApprovalEmail(contactPerson.email, contactPerson.full_name, org.org_name);
+      } catch (mailErr) {
+        console.error('Failed to send organization approval email:', mailErr);
       }
     }
     res.json({ success: true, message: 'Organization approved.' });
@@ -233,5 +289,129 @@ exports.getOrganizationDetails = async (req, res) => {
     res.json(detailedData);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching organization details.' });
+  }
+};
+
+// Fetch all suspended organizations
+exports.getSuspendedOrganizations = async (req, res) => {
+  try {
+    const summary = req.query.summary === '1';
+    const organizations = summary
+      ? await OrganizationApproval.getSummaryByStatus(2) // Fetch summary for suspended organizations
+      : await OrganizationApproval.getByStatus(2); // Fetch detailed data for suspended organizations
+    res.json(organizations);
+  } catch (error) {
+    console.error('Error fetching suspended organizations:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch suspended organizations.' });
+  }
+};
+
+// Activate organization
+exports.activateOrganization = async (req, res) => {
+  try {
+    const orgId = req.params.id;
+    const org = await OrganizationApproval.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ success: false, message: 'Organization not found.' });
+    }
+    if (org.is_active !== 2) {
+      return res.status(400).json({ success: false, message: 'Only suspended organizations can be activated.' });
+    }
+    const result = await OrganizationApproval.activate(orgId);
+    if (result.affectedRows === 0) {
+      return res.status(500).json({ success: false, message: 'Failed to activate organization.' });
+    }
+
+    // Fetch contact person details
+    const contactPersonId = org.org_contactperson_id;
+    let contactPerson = null;
+    if (contactPersonId) {
+      const User = require('../models/User');
+      try {
+        contactPerson = await User.findById(contactPersonId);
+      } catch (e) {
+        console.error('Failed to fetch contact person details:', e);
+      }
+    }
+
+    // Send activation email if contact person has email
+    if (contactPerson && contactPerson.email) {
+      try {
+        const { sendOrganizationActivationEmail } = require('../utils/notify');
+        await sendOrganizationActivationEmail(contactPerson.email, contactPerson.full_name, org.org_name);
+      } catch (mailErr) {
+        console.error('Failed to send organization activation email:', mailErr);
+      }
+    }
+    res.json({ success: true, message: 'Organization activated successfully.' });
+  } catch (error) {
+    console.error('Error activating organization:', error);
+    res.status(500).json({ success: false, message: 'Failed to activate organization.' });
+  }
+};
+
+// Remove organization
+exports.removeOrganization = async (req, res) => {
+  try {
+    const orgId = req.params.id;
+    const { message } = req.body; // Get custom message from request body
+    const org = await OrganizationApproval.findById(orgId);
+    if (!org) {
+      return res.status(404).json({ success: false, message: 'Organization not found.' });
+    }
+
+    // Fetch contact person details
+    const contactPersonId = org.org_contactperson_id;
+    let contactPerson = null;
+    if (contactPersonId) {
+      const User = require('../models/User');
+      try {
+        contactPerson = await User.findById(contactPersonId);
+      } catch (e) {
+        console.error('Failed to fetch contact person details:', e);
+      }
+    }
+
+    // Validate contact person email
+    if (!contactPerson || !contactPerson.email) {
+      return res.status(400).json({ success: false, message: 'Contact person email is missing.' });
+    }
+
+    // Send email notification before deletion
+    try {
+      await sendOrganizationRemovalEmail(contactPerson.email, org.org_name, message);
+    } catch (emailError) {
+      console.error('Failed to send email notification:', emailError);
+      return res.status(500).json({ success: false, message: 'Failed to send email notification.' });
+    }
+
+    // Notify assigned farmers
+    const farmers = await FarmerDetails.findByOrganizationId(orgId);
+    if (farmers.length === 0) {
+      console.info(`No farmers assigned to organization ${orgId}. Skipping farmer notifications.`);
+    } else {
+      for (const farmer of farmers) {
+        if (!farmer.email) {
+          console.warn(`Farmer ${farmer.id} does not have a valid email address. Skipping notification.`);
+          continue;
+        }
+        try {
+          await sendFarmerRemovalEmail(farmer.email, org.org_name);
+        } catch (emailError) {
+          console.error(`Failed to send email to farmer ${farmer.id}:`, emailError);
+        }
+      }
+    }
+
+    // Proceed with deletion
+    const result = await OrganizationApproval.remove(orgId);
+    if (result.affectedRows === 0) {
+      return res.status(500).json({ success: false, message: 'Failed to remove organization.' });
+    }
+
+    res.json({ success: true, message: 'Organization removed successfully.' });
+  } catch (error) {
+    console.error('Error removing organization:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove organization.' });
   }
 };

@@ -17,6 +17,16 @@ class FarmerDetails {
       throw error;
     }
   }
+
+  static async findByOrganizationId(organization_id) {
+    const query = 'SELECT * FROM farmer_details WHERE organization_id = ?';
+    try {
+      const [rows] = await pool.execute(query, [organization_id]);
+      return rows;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = FarmerDetails;
