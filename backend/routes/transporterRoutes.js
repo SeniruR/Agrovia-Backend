@@ -1,13 +1,35 @@
-
 const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/upload');
 const { registerTransporter } = require('../controllers/transporterController');
 const { authLimiter } = require('../middleware/rateLimiter');
 // You can add validation middleware if you create a Joi schema for transporter
-
-// Suspend transporter: set is_active=0 and insert into disable_accounts
 const { pool } = require('../config/database');
+
+// Approve transporter: set is_active=1 and remove from disable_accounts
+router.post('/approve/:id', async (req, res) => {
+  const userId = req.params.id;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Set is_active=1
+    const [result] = await conn.query('UPDATE users SET is_active=1 WHERE id=?', [userId]);
+    if (result.affectedRows === 0) {
+      await conn.rollback();
+      conn.release();
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    // Remove any disable_accounts rows for this user
+    await conn.query('DELETE FROM disable_accounts WHERE user_id=?', [userId]);
+    await conn.commit();
+    res.json({ success: true, message: 'Transporter approved.' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, message: 'Failed to approve transporter.' });
+  } finally {
+    conn.release();
+  }
+});
 router.post('/suspend/:id', async (req, res) => {
   const userId = req.params.id;
   const caseId = 5; // as per requirements
@@ -47,68 +69,57 @@ router.post('/register/transporter',
 // GET /api/v1/transporters/accounts
 // Get all transporter accounts
 router.get('/accounts', async (req, res) => {
-// Approve transporter: set is_active=1
-router.post('/approve/:id', async (req, res) => {
-  const userId = req.params.id;
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    // Set is_active=1
-    const [result] = await conn.query('UPDATE users SET is_active=1 WHERE id=?', [userId]);
-    if (result.affectedRows === 0) {
-      await conn.rollback();
-      conn.release();
-      return res.status(404).json({ success: false, message: 'User not found.' });
-    }
-    // Remove any disable_accounts rows for this user
-    await conn.query('DELETE FROM disable_accounts WHERE user_id=?', [userId]);
-    await conn.commit();
-    res.json({ success: true, message: 'Transporter approved.' });
-  } catch (err) {
-    await conn.rollback();
-    res.status(500).json({ success: false, message: 'Failed to approve transporter.' });
-  } finally {
-    conn.release();
-  }
-});
-
-// Reject transporter: delete from transporter_details and users
-router.post('/reject/:id', async (req, res) => {
-  const userId = req.params.id;
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    await conn.query('DELETE FROM transporter_details WHERE user_id=?', [userId]);
-    await conn.query('DELETE FROM users WHERE id=?', [userId]);
-    await conn.commit();
-    res.json({ success: true, message: 'Transporter rejected and removed.' });
-  } catch (err) {
-    await conn.rollback();
-    res.status(500).json({ success: false, message: 'Failed to reject transporter.' });
-  } finally {
-    conn.release();
-  }
-});
   try {
     const [results] = await pool.query(`
       SELECT 
-        u.id, u.full_name, u.email, u.phone_number, u.address, u.district, u.is_active,
+        u.id, u.full_name, u.email, u.phone_number, u.address, u.district, u.nic, u.is_active,
         u.profile_image, u.profile_image_mime,
-        t.vehicle_type, t.vehicle_number, t.vehicle_capacity, t.capacity_unit, t.license_number, t.license_expiry, t.additional_info
+        t.vehicle_type, t.vehicle_number, t.vehicle_capacity, t.capacity_unit, t.license_number, t.license_expiry, t.additional_info,
+        u.user_type, u.created_at
       FROM users u
       JOIN transporter_details t ON u.id = t.user_id
       WHERE u.user_type = 4
     `);
-    // Convert profile_image (Buffer) to base64 data URL if present
+
+    // Helper to map user_type to label
+    const userTypeLabel = (type) => {
+      if (type === 4 || type === '4') return 'Logistics Provider';
+      return '-';
+    };
+
+    // Helper to format date
+    const formatDate = (date) => {
+      if (!date) return '-';
+      const d = new Date(date);
+      if (isNaN(d)) return '-';
+      return d.toLocaleString('en-GB', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+
     const processed = results.map(row => {
+      let profile_picture = null;
       if (row.profile_image) {
-        row.profile_picture = `data:${row.profile_image_mime || 'image/jpeg'};base64,${row.profile_image.toString('base64')}`;
-      } else {
-        row.profile_picture = null;
+        profile_picture = `data:${row.profile_image_mime || 'image/jpeg'};base64,${row.profile_image.toString('base64')}`;
       }
-      delete row.profile_image;
-      delete row.profile_image_mime;
-      return row;
+      return {
+        id: row.id,
+        full_name: row.full_name,
+        email: row.email,
+        phone_number: row.phone_number,
+        address: row.address,
+        district: row.district,
+        nic: row.nic,
+        is_active: row.is_active,
+        vehicle_type: row.vehicle_type,
+        vehicle_number: row.vehicle_number,
+        vehicle_capacity: row.vehicle_capacity,
+        capacity_unit: row.capacity_unit,
+        license_number: row.license_number,
+        license_expiry: formatDate(row.license_expiry),
+        additional_info: row.additional_info,
+        profile_picture,
+        user_type: userTypeLabel(row.user_type),
+        created_at: formatDate(row.created_at)
+      };
     });
     res.json(processed);
   } catch (err) {
