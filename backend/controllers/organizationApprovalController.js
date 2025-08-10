@@ -5,18 +5,19 @@ const OrganizationApproval = require('../models/OrganizationApproval');
 exports.getAllOrganizations = async (req, res) => {
   try {
     const orgs = await OrganizationApproval.getAll();
-    const mapped = orgs.map(org => ({
-      id: org.id,
-      org_name: org.org_name,
-      area: org.org_area,
-      govijanasewaniladariname: org.gn_name,
-      govijanasewaniladariContact: org.gn_contactno,
-      establishedDate: org.est,
-      organizationDescription: org.org_description,
-      letterofProof: org.letter_of_proof_file,
-      is_active: org.is_active,
-      status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : org.is_active === -1 ? 'rejected' : 'unknown'
-    }));
+      const mapped = orgs.map(org => ({
+        id: org.id,
+        org_name: org.org_name,
+        area: org.org_area,
+        govijanasewaniladariname: org.gn_name,
+        govijanasewaniladariContact: org.gn_contactno,
+        establishedDate: org.est,
+        organizationDescription: org.org_description,
+        letterofProof: org.letter_of_proof_file,
+        is_active: org.is_active,
+        created_at: org.created_at,
+        status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : org.is_active === -1 ? 'rejected' : 'unknown'
+      }));
     res.json(mapped);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching organizations.' });
@@ -26,17 +27,18 @@ exports.getAllOrganizations = async (req, res) => {
 exports.getApprovedOrganizations = async (req, res) => {
   try {
     const orgs = await OrganizationApproval.getApproved();
-    const mapped = orgs.map(org => ({
-      id: org.id,
-      org_name: org.org_name,
-      area: org.org_area,
-      govijanasewaniladariname: org.gn_name,
-      govijanasewaniladariContact: org.gn_contactno,
-      establishedDate: org.est,
-      organizationDescription: org.org_description,
-      letterofProof: org.letter_of_proof_file,
-      status: 'approved'
-    }));
+      const mapped = orgs.map(org => ({
+        id: org.id,
+        org_name: org.org_name,
+        area: org.org_area,
+        govijanasewaniladariname: org.gn_name,
+        govijanasewaniladariContact: org.gn_contactno,
+        establishedDate: org.est,
+        organizationDescription: org.org_description,
+        letterofProof: org.letter_of_proof_file,
+        created_at: org.created_at,
+        status: 'approved'
+      }));
     res.json(mapped);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching organizations.' });
@@ -47,17 +49,18 @@ exports.getApprovedOrganizations = async (req, res) => {
 exports.getRejectedOrganizations = async (req, res) => {
   try {
     const orgs = await OrganizationApproval.getRejected();
-    const mapped = orgs.map(org => ({
-      id: org.id,
-      org_name: org.org_name,
-      area: org.org_area,
-      govijanasewaniladariname: org.gn_name,
-      govijanasewaniladariContact: org.gn_contactno,
-      establishedDate: org.est,
-      organizationDescription: org.org_description,
-      letterofProof: org.letter_of_proof_file,
-      status: 'rejected'
-    }));
+      const mapped = orgs.map(org => ({
+        id: org.id,
+        org_name: org.org_name,
+        area: org.org_area,
+        govijanasewaniladariname: org.gn_name,
+        govijanasewaniladariContact: org.gn_contactno,
+        establishedDate: org.est,
+        organizationDescription: org.org_description,
+        letterofProof: org.letter_of_proof_file,
+        created_at: org.created_at,
+        status: 'rejected'
+      }));
     res.json(mapped);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching organizations.' });
@@ -69,17 +72,18 @@ exports.getPendingOrganizations = async (req, res) => {
   try {
     const orgs = await OrganizationApproval.getPending();
     // Map DB fields to frontend fields
-    const mapped = orgs.map(org => ({
-      id: org.id,
-      org_name: org.org_name,
-      area: org.org_area,
-      govijanasewaniladariname: org.gn_name,
-      govijanasewaniladariContact: org.gn_contactno,
-      establishedDate: org.est,
-      organizationDescription: org.org_description,
-      letterofProof: org.letter_of_proof_file,
-      status: org.is_active === 0 ? 'pending' : org.is_active === 1 ? 'approved' : 'rejected'
-    }));
+      const mapped = orgs.map(org => ({
+        id: org.id,
+        org_name: org.org_name,
+        area: org.org_area,
+        govijanasewaniladariname: org.gn_name,
+        govijanasewaniladariContact: org.gn_contactno,
+        establishedDate: org.est,
+        organizationDescription: org.org_description,
+        letterofProof: org.letter_of_proof_file,
+        created_at: org.created_at,
+        status: org.is_active === 0 ? 'pending' : org.is_active === 1 ? 'approved' : 'rejected'
+      }));
     res.json(mapped);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching organizations.' });
@@ -213,18 +217,19 @@ exports.getOrganizationDetails = async (req, res) => {
     if (!org) {
       return res.status(404).json({ success: false, message: 'Organization not found.' });
     }
-    const detailedData = {
-      id: org.id,
-      org_name: org.org_name,
-      area: org.org_area,
-      govijanasewaniladariname: org.gn_name,
-      govijanasewaniladariContact: org.gn_contactno,
-      establishedDate: org.est,
-      organizationDescription: org.org_description,
-      letterofProof: org.letter_of_proof_file,
-      is_active: org.is_active,
-      status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : 'rejected'
-    };
+      const detailedData = {
+        id: org.id,
+        org_name: org.org_name,
+        area: org.org_area,
+        govijanasewaniladariname: org.gn_name,
+        govijanasewaniladariContact: org.gn_contactno,
+        establishedDate: org.est,
+        organizationDescription: org.org_description,
+        letterofProof: org.letter_of_proof_file,
+        is_active: org.is_active,
+        created_at: org.created_at,
+        status: org.is_active === 1 ? 'approved' : org.is_active === 0 ? 'pending' : 'rejected'
+      };
     res.json(detailedData);
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error fetching organization details.' });
