@@ -14,6 +14,7 @@ const moderatorRoutes = require('./moderatorRoutes');
 const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
+const articleRoutes = require('./articles');
 
 const organizationApprovalRoutes = require('./organizationApproval');
 // (undo) removed disableAccounts route registration
@@ -47,6 +48,7 @@ router.use('/moderators', moderatorRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
+router.use('/articles', articleRoutes);
 
 // Mount proxy routes
 const proxyRoutes = require('./proxy');

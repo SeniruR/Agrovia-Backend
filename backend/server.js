@@ -32,7 +32,7 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
 }));
 // CORS configuration
 // app.use(cors({
