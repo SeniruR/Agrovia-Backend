@@ -62,7 +62,6 @@ const shopProductRoutes = require('./routes/shopProductRoutes');
 
 
 app.use('/api/v1/shop-products', shopProductRoutes);
-
 // API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);

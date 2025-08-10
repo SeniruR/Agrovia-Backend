@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/upload');
-const { registerTransporter } = require('../controllers/transporterController');
+const { registerTransporter, getAllTransporters } = require('../controllers/transporterController');
 const { authLimiter } = require('../middleware/rateLimiter');
 // You can add validation middleware if you create a Joi schema for transporter
 
@@ -41,6 +41,7 @@ router.post('/register/transporter',
   upload.single('profile_image'),
   registerTransporter
 );
+
 
 
 
@@ -115,5 +116,7 @@ router.post('/reject/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch transporter accounts' });
   }
 });
+
+router.get('/', getAllTransporters);
 
 module.exports = router;
