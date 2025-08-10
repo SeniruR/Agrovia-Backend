@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/database');
+const { sendModeratorRejectionEmail, sendModeratorApprovalEmail, sendModeratorSuspensionEmail } = require('../utils/notify');
 
 // GET /api/v1/moderators/accounts - get all moderator accounts (for admin approval UI)
 // GET /api/v1/moderators/accounts - get all moderator accounts (for admin approval UI)
@@ -116,9 +117,19 @@ router.post('/approve/:id', async (req, res) => {
         conn.release();
         return res.status(404).json({ success: false, message: 'Moderator not found' });
       }
+      // Get moderator email and name
+      const [userRows] = await conn.query('SELECT email, full_name FROM users WHERE id = ?', [id]);
       // Remove any disable_accounts rows for this user
       await conn.query('DELETE FROM disable_accounts WHERE user_id = ?', [id]);
       await conn.commit();
+      // Send approval email
+      if (userRows && userRows[0] && userRows[0].email) {
+        try {
+          await sendModeratorApprovalEmail(userRows[0].email, userRows[0].full_name);
+        } catch (mailErr) {
+          console.error('Failed to send moderator approval email:', mailErr);
+        }
+      }
       res.json({ success: true, message: 'Moderator approved' });
     } catch (err) {
       await conn.rollback();
@@ -148,9 +159,19 @@ router.post('/suspend/:id', async (req, res) => {
         conn.release();
         return res.status(404).json({ success: false, message: 'Moderator not found' });
       }
+      // Get moderator email and name
+      const [userRows] = await conn.query('SELECT email, full_name FROM users WHERE id = ?', [id]);
       // Insert into disable_accounts
       await conn.query('INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())', [id, 5]);
       await conn.commit();
+      // Send suspension email
+      if (userRows && userRows[0] && userRows[0].email) {
+        try {
+          await sendModeratorSuspensionEmail(userRows[0].email, userRows[0].full_name);
+        } catch (mailErr) {
+          console.error('Failed to send moderator suspension email:', mailErr);
+        }
+      }
       res.json({ success: true, message: 'Moderator suspended' });
     } catch (err) {
       await conn.rollback();
@@ -169,9 +190,18 @@ router.post('/suspend/:id', async (req, res) => {
 router.post('/reject/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { message } = req.body;
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      // Get moderator email and name before deleting
+      const [userRows] = await conn.query('SELECT email, full_name FROM users WHERE id = ? AND (user_type = ? OR user_type = ?)', [id, '5', '5.1']);
+      if (!userRows.length) {
+        await conn.rollback();
+        conn.release();
+        return res.status(404).json({ success: false, message: 'Moderator not found' });
+      }
+      const { email, full_name } = userRows[0];
       // Remove any disable_accounts rows for this user
       await conn.query('DELETE FROM disable_accounts WHERE user_id = ?', [id]);
       // Delete user
@@ -182,6 +212,12 @@ router.post('/reject/:id', async (req, res) => {
         return res.status(404).json({ success: false, message: 'Moderator not found' });
       }
       await conn.commit();
+      // Send rejection email
+      try {
+        await sendModeratorRejectionEmail(email, full_name, message);
+      } catch (mailErr) {
+        console.error('Failed to send moderator rejection email:', mailErr);
+      }
       res.json({ success: true, message: 'Moderator rejected and deleted' });
     } catch (err) {
       await conn.rollback();

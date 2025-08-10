@@ -6,7 +6,38 @@ const { authLimiter } = require('../middleware/rateLimiter');
 // You can add validation middleware if you create a Joi schema for transporter
 const { pool } = require('../config/database');
 
-// Approve transporter: set is_active=1 and remove from disable_accounts
+// Approve/reject/suspend transporter: set is_active=1 and remove from disable_accounts, then send approval/rejection/suspension email
+const { sendLogisticsApprovalEmail, sendLogisticsRejectionEmail, sendLogisticsSuspensionEmail } = require('../utils/notify');
+// Reject transporter: delete user and send rejection email
+router.post('/reject/:id', async (req, res) => {
+  const userId = req.params.id;
+  const { message } = req.body;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    // Fetch user email and name before deleting
+    const [userRows] = await conn.query('SELECT email, full_name FROM users WHERE id=?', [userId]);
+    // Delete user
+    const [result] = await conn.query('DELETE FROM users WHERE id=?', [userId]);
+    // Remove any disable_accounts rows for this user
+    await conn.query('DELETE FROM disable_accounts WHERE user_id=?', [userId]);
+    await conn.commit();
+    if (userRows && userRows[0] && userRows[0].email) {
+      try {
+        await sendLogisticsRejectionEmail(userRows[0].email, userRows[0].full_name, message);
+      } catch (mailErr) {
+        // Log but don't block rejection if email fails
+        console.error('Failed to send rejection email:', mailErr);
+      }
+    }
+    res.json({ success: true, message: 'Transporter rejected and deleted.' });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, message: 'Failed to reject transporter.' });
+  } finally {
+    conn.release();
+  }
+});
 router.post('/approve/:id', async (req, res) => {
   const userId = req.params.id;
   const conn = await pool.getConnection();
@@ -22,6 +53,18 @@ router.post('/approve/:id', async (req, res) => {
     // Remove any disable_accounts rows for this user
     await conn.query('DELETE FROM disable_accounts WHERE user_id=?', [userId]);
     await conn.commit();
+
+    // Fetch user email and name
+    const [userRows] = await conn.query('SELECT email, full_name FROM users WHERE id=?', [userId]);
+    if (userRows && userRows[0] && userRows[0].email) {
+      try {
+        await sendLogisticsApprovalEmail(userRows[0].email, userRows[0].full_name);
+      } catch (mailErr) {
+        // Log but don't block approval if email fails
+        console.error('Failed to send approval email:', mailErr);
+      }
+    }
+
     res.json({ success: true, message: 'Transporter approved.' });
   } catch (err) {
     await conn.rollback();
@@ -49,6 +92,18 @@ router.post('/suspend/:id', async (req, res) => {
       [userId, caseId]
     );
     await conn.commit();
+
+    // Fetch user email and name
+    const [userRows] = await conn.query('SELECT email, full_name FROM users WHERE id=?', [userId]);
+    if (userRows && userRows[0] && userRows[0].email) {
+      try {
+        await sendLogisticsSuspensionEmail(userRows[0].email, userRows[0].full_name);
+      } catch (mailErr) {
+        // Log but don't block suspension if email fails
+        console.error('Failed to send suspension email:', mailErr);
+      }
+    }
+
     res.json({ success: true, message: 'Account suspended.' });
   } catch (err) {
     await conn.rollback();
