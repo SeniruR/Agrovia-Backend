@@ -4,6 +4,10 @@ const { formatResponse } = require('../utils/helpers');
 // Create a new article
 const createArticle = async (req, res, next) => {
   try {
+    console.log('Request body:', req.body);
+    console.log('Request files:', req.files);
+    console.log('Request user:', req.user);
+
     const {
       title,
       content,
@@ -61,6 +65,7 @@ const createArticle = async (req, res, next) => {
       formatResponse(true, 'Article created successfully', { articleId: result.articleId })
     );
   } catch (error) {
+    console.error('Article creation error:', error);
     next(error);
   }
 };

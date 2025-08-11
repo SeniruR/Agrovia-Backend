@@ -75,6 +75,34 @@ const createTables = async (connection) => {
       )
     `);
 
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS articles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        cover_image LONGBLOB,
+        cover_image_mime VARCHAR(100),
+        user_id INT NOT NULL,
+        category VARCHAR(100) DEFAULT 'Default',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Article figures table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS article_figures (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        article_id INT NOT NULL,
+        figure_name VARCHAR(255) NOT NULL,
+        figure_image LONGBLOB NOT NULL,
+        figure_mime_type VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
+      )
+    `);
+
     // Farmer details table (organization_committee_number foreign key here)
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS farmer_details (
