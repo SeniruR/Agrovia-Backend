@@ -86,8 +86,12 @@ const startServer = async () => {
     // Test database connection
     await testConnection();
     
-    // Start the server
-    app.listen(PORT, () => {
+    // Start the server with HTTP for Socket.IO
+    const http = require('http');
+    const server = http.createServer(app);
+    // Setup Socket.IO for BulkSellerChat
+    require('./services/bulkSellerChatSocket')(server);
+    server.listen(PORT, () => {
       console.log(`
 🚀 Agrovia Backend Server Started
 📍 Environment: ${process.env.NODE_ENV || 'development'}

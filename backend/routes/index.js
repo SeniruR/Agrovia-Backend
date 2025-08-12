@@ -15,6 +15,8 @@ const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
 
+const bulkSellerChatRoutes = require('./bulkSellerChat');
+
 const organizationApprovalRoutes = require('./organizationApproval');
 // (undo) removed disableAccounts route registration
 const router = express.Router();
@@ -47,6 +49,9 @@ router.use('/moderators', moderatorRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
+
+// Bulk Seller Chat API
+router.use('/bulk-seller-chat', bulkSellerChatRoutes);
 
 // Mount proxy routes
 const proxyRoutes = require('./proxy');
