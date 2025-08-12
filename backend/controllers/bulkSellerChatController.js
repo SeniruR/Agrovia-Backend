@@ -10,6 +10,7 @@ exports.sendMessage = async (req, res) => {
     const messageId = await BulkSellerChat.createMessage({ sender_id, receiver_id, message, chat_room_id });
     res.status(201).json({ message: 'Message sent', id: messageId });
   } catch (err) {
+    console.error('Error in sendMessage:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -21,6 +22,7 @@ exports.getMessages = async (req, res) => {
     const messages = await BulkSellerChat.getMessagesByRoom(chat_room_id);
     res.json(messages);
   } catch (err) {
+    console.error('Error in getMessages:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -32,6 +34,7 @@ exports.getChatRooms = async (req, res) => {
     const rooms = await BulkSellerChat.getChatRoomsForUser(user_id);
     res.json(rooms);
   } catch (err) {
+    console.error('Error in getChatRooms:', err);
     res.status(500).json({ error: err.message });
   }
 };

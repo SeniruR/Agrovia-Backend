@@ -19,17 +19,23 @@ function setupBulkSellerChatSocket(server) {
     // Handle sending a message
     socket.on('sendMessage', async (data) => {
       const { sender_id, receiver_id, message, chat_room_id } = data;
-      if (!sender_id || !receiver_id || !message || !chat_room_id) return;
-      // Save to DB
-      await BulkSellerChat.createMessage({ sender_id, receiver_id, message, chat_room_id });
-      // Emit to room
-      io.to(chat_room_id).emit('newMessage', {
-        sender_id,
-        receiver_id,
-        message,
-        chat_room_id,
-        created_at: new Date().toISOString()
-      });
+      if (!sender_id || !receiver_id || !message || !chat_room_id) {
+        console.error('Socket sendMessage missing fields:', data);
+        return;
+      }
+      try {
+        const msgId = await BulkSellerChat.createMessage({ sender_id, receiver_id, message, chat_room_id });
+        io.to(chat_room_id).emit('newMessage', {
+          sender_id,
+          receiver_id,
+          message,
+          chat_room_id,
+          id: msgId,
+          created_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.error('Socket sendMessage error:', err);
+      }
     });
   });
 
