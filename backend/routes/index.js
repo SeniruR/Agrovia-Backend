@@ -16,6 +16,7 @@ const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
 
 const organizationApprovalRoutes = require('./organizationApproval');
+const shopOwnerRoutes = require('./shopOwnerRoutes'); // <-- Require shopOwnerRoutes
 // (undo) removed disableAccounts route registration
 const router = express.Router();
 
@@ -47,6 +48,7 @@ router.use('/moderators', moderatorRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
+router.use('/shopowners', shopOwnerRoutes); // <-- Register shopOwnerRoutes
 
 // Mount proxy routes
 const proxyRoutes = require('./proxy');
