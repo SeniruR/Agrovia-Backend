@@ -31,6 +31,7 @@ router.get('/health', (req, res) => {
 
 // (undo) removed disableAccounts route registration
 
+
 // API routes
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
@@ -47,6 +48,9 @@ router.use('/moderators', moderatorRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
+
+// Pest Alerts API
+router.use('/pest-alerts', require('./pestAlerts'));
 
 // Mount proxy routes
 const proxyRoutes = require('./proxy');
