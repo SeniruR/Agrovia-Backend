@@ -8,9 +8,11 @@ exports.getAllShopOwners = async (req, res) => {
     // Use a JOIN to fetch users and their shop details in one query
     const query = `
       SELECT u.id, u.full_name, u.email, u.phone_number, u.district, u.nic, u.address, u.user_type, u.created_at, u.is_active, u.profile_image, u.profile_image_mime,
-        s.shop_name, s.business_registration_number, s.shop_address, s.shop_phone_number, s.shop_email, s.shop_description, s.shop_category, s.operating_hours, s.opening_days, s.delivery_areas, s.shop_license, s.shop_image
+        s.shop_name, s.business_registration_number, s.shop_address, s.shop_phone_number, s.shop_email, s.shop_description, s.shop_category, s.operating_hours, s.opening_days, s.delivery_areas, s.shop_license, s.shop_image,
+        da.case_id AS disable_case_id
       FROM users u
       LEFT JOIN shop_details s ON u.id = s.user_id
+      LEFT JOIN disable_accounts da ON u.id = da.user_id
       WHERE u.user_type = 3
     `;
     const [rows] = await db.pool.execute(query);
@@ -53,6 +55,9 @@ exports.suspendShopOwner = async (req, res) => {
   try {
     const id = req.params.id;
     await User.setActive(id, 0);
+    // Insert into disable_accounts with case_id 5 (suspended)
+    const insertQuery = 'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 5, NOW())';
+    await db.pool.execute(insertQuery, [id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Error suspending shop owner', error: err.message });
