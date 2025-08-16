@@ -122,18 +122,26 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found after update' });
     }
-    
+
     let farmerDetails = null;
+    let buyerDetails = null;
+
+    // Fetch farmer details if applicable
     if (user.user_type === '1' || user.user_type === '1.1') { // 1 or 1.1 = farmer
       farmerDetails = await FarmerDetails.findByUserId(user.id);
     }
-    
+    // Fetch buyer details if applicable
+    if (user.user_type === '2') {
+      buyerDetails = await BuyerDetails.findByUserId(user.id);
+    }
+
     return res.json({
       success: true,
       message: 'Profile updated successfully.',
       user: {
         ...sanitizeUser(user),
-        farmer_details: farmerDetails
+        farmer_details: farmerDetails,
+        buyer_details: buyerDetails
       }
     });
   } catch (err) {
