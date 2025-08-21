@@ -53,6 +53,23 @@ class TransportAllocation{
 
     return pool.query(transportAllocationQuery, values);
     }
+
+    // find allocations by cart item id
+    static async findByCartItem(cart_item_id){
+        const query = `SELECT * FROM cart_transports WHERE cart_item_id = ? ORDER BY created_at DESC`;
+        const [rows] = await pool.query(query, [cart_item_id]);
+        return rows;
+    }
+
+    // return all transport allocations
+    static async findAll(){
+        const query = `SELECT * FROM cart_transports ORDER BY created_at DESC`;
+        const [rows] = await pool.query(query);
+        return rows;
+    }
+
+    
 }
+
 
 module.exports = TransportAllocation;

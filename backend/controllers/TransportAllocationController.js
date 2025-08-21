@@ -65,3 +65,25 @@ exports.createTransportAllocation = async (req, res) => {
         res.status(500).json({ message: 'Error creating transport allocation', error: error.message });
     }
 };
+// Get all transport allocations
+exports.getAllTransportAllocations = async (req, res) => {
+    try {
+        const rows = await TransportAllocation.findAll();
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('Get all transport allocations error:', err);
+        res.status(500).json({ message: 'Error fetching transport allocations', error: err.message });
+    }
+};
+
+// Get allocations by cart item id
+exports.getByCartItem = async (req, res) => {
+    try {
+        const cart_item_id = req.params.cart_item_id;
+        const rows = await TransportAllocation.findByCartItem(cart_item_id);
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('Get allocations by cart item error:', err);
+        res.status(500).json({ message: 'Error fetching transport allocations', error: err.message });
+    }
+};
