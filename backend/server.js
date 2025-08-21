@@ -59,7 +59,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/uploads/crop-images', express.static(path.join(__dirname, 'uploads/crop-images')));
 const shopProductRoutes = require('./routes/shopProductRoutes');
-
+// Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
+const transportAllocationRoutes = require('./routes/TransportRoutes');
+app.use('/api/transport-allocations', transportAllocationRoutes);
 
 app.use('/api/v1/shop-products', shopProductRoutes);
 // API routes
