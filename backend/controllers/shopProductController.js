@@ -18,10 +18,7 @@ exports.createShopProduct = async (req, res) => {
       });
     }
 
-    const userId = req.user.id;
-    console.log('✅ Creating shop item for User ID:', userId);
-    console.log('Received files:', req.files); // Log received files
-    console.log('Received body:', req.body); // Log received data
+  const userId = req.user.id;
 
     // Resolve shop_id from shop_details
     const connection = await pool.getConnection();
@@ -240,9 +237,7 @@ exports.updateProduct = async (req, res) => {
   try {
     const { shopitemid } = req.params;
 
-    // Debug logs
-    console.log('Request body:', req.body);
-    console.log('Uploaded files count:', req.files?.length || 0);
+  // Debug logs removed in production
 
     // Initialize update data with sanitized fields
     const updateData = {

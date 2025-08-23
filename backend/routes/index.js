@@ -50,6 +50,9 @@ router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
 router.use('/shopowners', shopOwnerRoutes); // <-- Register shopOwnerRoutes
 
+// Register admin routes
+router.use('/admin', require('./adminRoutes'));
+
 // Mount proxy routes
 const proxyRoutes = require('./proxy');
 router.use('/proxy', proxyRoutes);

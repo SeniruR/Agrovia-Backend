@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+// const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 
@@ -20,7 +20,13 @@ const routes = require('./routes');
 const orderRoutes = require('./routes/orders');
 
 // Create Express app
+const cors = require('cors');
 const app = express();
+// Enable CORS for frontend dev server
+app.use(cors({
+  origin: 'http://localhost:5174',
+  credentials: true
+}));
 const PORT = process.env.PORT || 5000;
 
 // Security middleware

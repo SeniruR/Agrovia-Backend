@@ -196,7 +196,7 @@ const ShopProductModel = {
 
   // Return shop details (single object) for a user
   getShopDetailsByUserId: async (userId) => {
-    const [rows] = await pool.execute(`
+  const [rows] = await pool.execute(`
   SELECT sd.id AS shop_id, sd.shop_name,
   sd.is_active,
      u.full_name AS owner_name,
@@ -212,13 +212,61 @@ const ShopProductModel = {
      sd.latitude,
      sd.longitude,
      sd.shop_image AS shop_image_blob, sd.shop_image_mime,
-     NULL AS city
+     NULL AS city,
+     (
+       SELECT ss.reason_code FROM shop_suspensions ss
+       WHERE ss.shop_id = sd.id
+       ORDER BY ss.created_at DESC
+       LIMIT 1
+     ) AS suspension_reason,
+     (
+       SELECT ss.reason_detail FROM shop_suspensions ss
+       WHERE ss.shop_id = sd.id
+       ORDER BY ss.created_at DESC
+       LIMIT 1
+     ) AS suspension_detail
+    ,(
+      -- comma-separated list of product ids affected by the latest suspension (if any)
+      SELECT GROUP_CONCAT(ssi.product_id) FROM shop_suspension_items ssi
+      WHERE ssi.suspension_id = (
+        SELECT ss2.id FROM shop_suspensions ss2
+        WHERE ss2.shop_id = sd.id
+        ORDER BY ss2.created_at DESC
+        LIMIT 1
+      )
+    ) AS suspension_item_ids
       FROM shop_details sd
       LEFT JOIN users u ON u.id = sd.user_id
       WHERE sd.user_id = ?
       LIMIT 1
     `, [userId]);
-    return rows && rows.length ? rows[0] : null;
+
+    if (!rows || rows.length === 0) return null;
+    const shop = rows[0];
+
+    // If there are suspension item ids, fetch their basic details
+    if (shop.suspension_item_ids) {
+      // suspension_item_ids stored as comma-separated string
+      const ids = shop.suspension_item_ids.split(',').map(s => Number(s)).filter(Boolean);
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        const [itemRows] = await pool.execute(
+          `SELECT p.id AS id, p.product_name, pc.name AS category, inv.unit_price AS price
+           FROM products p
+           LEFT JOIN product_categories pc ON pc.id = p.category_id
+           LEFT JOIN product_inventory inv ON inv.product_id = p.id
+           WHERE p.id IN (${placeholders})`,
+          ids
+        );
+        shop.suspension_items = (itemRows || []).map(r => ({ id: r.id, product_name: r.product_name, category: r.category, price: r.price }));
+      } else {
+        shop.suspension_items = [];
+      }
+    } else {
+      shop.suspension_items = [];
+    }
+
+    return shop;
   },
 
   findById: async (productId) => {
