@@ -1,78 +1,127 @@
 const ShopProductModel = require('../models/shopProductModel');
-//const ShopProductModel = require('../models/shopProductModel');
+const { pool } = require('../config/database');
+const ShopOwner = require('../models/ShopOwner');
 
 exports.createShopProduct = async (req, res) => {
   try {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({
-          success: false,
-          message: 'Authentication required. User not found in request.'
-        });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required. User not found in request.'
+      });
+    }
+
+    if (req.user.role !== 'shop_owner') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only shop owners can create shop products.'
+      });
+    }
+
+  const userId = req.user.id;
+
+    // Resolve shop_id from shop_details
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const [shopRows] = await connection.execute('SELECT id FROM shop_details WHERE user_id = ?', [userId]);
+      const shopRow = shopRows && shopRows.length ? shopRows[0] : null;
+      if (!shopRow) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({ success: false, message: 'Shop details not found for user.' });
       }
-        if (req.user.role !== 'shop_owner') {
-        return res.status(403).json({
-          success: false,
-          message: 'Only farmers can create crop posts.'
-        });
+      const shopId = shopRow.id;
+
+      // Resolve or create category. If no explicit category provided, fall back to product_type
+      let categoryNameRaw = req.body.category === 'Other' ? req.body.category_other : req.body.category;
+      if (!categoryNameRaw || !categoryNameRaw.toString().trim()) {
+        // fallback to product_type (e.g. 'fertilizer', 'seeds', 'chemical')
+        categoryNameRaw = req.body.product_type || null;
       }
-       const userId = req.user.id;
-      console.log('✅ Creating shop item for User ID:', userId);
-  
-     console.log('Received files:', req.files); // Log received files
-    console.log('Received body:', req.body); // Log received data
-    // Process form data
-    const {
-      shop_name, owner_name, email, phone_no, shop_address, city,
-      product_type, product_name, brand, category, season, price,
-      unit, available_quantity, product_description, usage_history,
-      organic_certified, terms_accepted, category_other
-    } = req.body;
-
-    // Process uploaded files
-    const uploadedImages = req.files.map(file => ({
-      buffer: file.buffer.toString('base64'),
-      mimetype: file.mimetype,
-      originalname: file.originalname,
-      size: file.size
-    }));
-
-    // Prepare product data
-    const productData = {
-      shop_name,
-      owner_name,
-      email,
-      phone_no,
-      shop_address,
-      city,
-      product_type,
-      product_name,
-      brand,
-      category: category === "Other" ? category_other : category,
-      season: season || null,
-      price: parseFloat(price),
-      unit: unit || null,
-      available_quantity: parseInt(available_quantity) || 0,
-      product_description,
-      usage_history: usage_history || null,
-      organic_certified: organic_certified === 'true' || organic_certified === true,
-      terms_accepted: terms_accepted === 'true' || terms_accepted === true,
-      images: JSON.stringify(uploadedImages),
-      user_id: userId // From middleware
-    };
-
-    // Database insertion
-    const result = await ShopProductModel.create(productData);
-
-    return res.status(201).json({
-      success: true,
-      message: 'Shop product created successfully',
-      productId: result.insertId,
-      data: {
-        ...productData,
-        images: uploadedImages.length
+      const categoryName = categoryNameRaw ? categoryNameRaw.toString().trim() : null;
+      let categoryId = null;
+      if (categoryName) {
+        // Use case-insensitive lookup to match values like 'fertilizer' -> 'Fertilizer'
+        const [catRows] = await connection.execute('SELECT id FROM product_categories WHERE LOWER(name) = LOWER(?)', [categoryName]);
+        if (catRows.length) categoryId = catRows[0].id;
+        else {
+          const [catRes] = await connection.execute('INSERT INTO product_categories (name) VALUES (?)', [categoryName]);
+          categoryId = catRes.insertId;
+        }
       }
-    });
 
+      // Ensure product_images table exists (for multi-image support)
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS product_images (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          product_id BIGINT NOT NULL,
+          image LONGBLOB,
+          image_mime VARCHAR(45),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+        )
+      `);
+
+      // Insert product (store primary image as first file if provided)
+      const firstFile = req.files && req.files.length ? req.files[0] : null;
+      const imageBuffer = firstFile ? firstFile.buffer : null;
+      const imageMime = firstFile ? firstFile.mimetype : null;
+
+      const [prodRes] = await connection.execute(
+        `INSERT INTO products (shop_id, product_name, brand_name, description, category_id, image, image_mime)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          shopId,
+          req.body.product_name,
+          req.body.brand || null,
+          req.body.product_description || null,
+          categoryId || null,
+          imageBuffer,
+          imageMime
+        ]
+      );
+
+      const productId = prodRes.insertId;
+
+      // Insert all images into product_images table
+      if (req.files && req.files.length) {
+        for (const file of req.files) {
+          await connection.execute(
+            'INSERT INTO product_images (product_id, image, image_mime) VALUES (?, ?, ?)',
+            [productId, file.buffer, file.mimetype]
+          );
+        }
+      }
+
+      // Insert into product_inventory
+      const unit = req.body.unit || null;
+      const price = parseFloat(req.body.price) || 0;
+      const quantity = parseFloat(req.body.available_quantity || 0) || 0;
+      const isAvailable = quantity > 0 ? 1 : 0;
+
+      const [invRes] = await connection.execute(
+        `INSERT INTO product_inventory (product_id, unit_type, unit_price, quantity, is_available)
+         VALUES (?, ?, ?, ?, ?)`,
+        [productId, unit, price, quantity, isAvailable]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      return res.status(201).json({
+        success: true,
+        message: 'Product created successfully',
+        productId,
+        inventoryId: invRes.insertId
+      });
+    } catch (err) {
+      await connection.rollback();
+      connection.release();
+      console.error('Error in product creation transaction:', err);
+      return res.status(500).json({ success: false, message: 'Failed to create product', error: err.message });
+    }
   } catch (error) {
     console.error('Detailed error:', {
       message: error.message,
@@ -80,7 +129,6 @@ exports.createShopProduct = async (req, res) => {
       body: req.body,
       files: req.files
     });
-    console.error('Error creating shop product:', error);
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -95,187 +143,32 @@ exports.createShopProduct = async (req, res) => {
 exports.getAllShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAll();
-
-    const formattedProducts = products.map(product => {
-      // Handle Boolean fields
-      const organic_certified = Boolean(product.organic_certified);
-      const terms_accepted = Boolean(product.terms_accepted);
-
-      let images = [];
-
-      // Case 1: If image is a Buffer (single image in BLOB column)
-      if (Buffer.isBuffer(product.images)) {
-        const base64Image = product.images.toString('base64');
-        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
-      }
-
-      // Case 2: If image is stored as a JSON string
-      else if (typeof product.images === 'string') {
-        if (typeof product.images === 'string') {
-  try {
-    const parsed = JSON.parse(product.images);
-    if (Array.isArray(parsed)) {
-      images = parsed.map(img => {
-        if (img.buffer && img.mimetype) {
-          return `data:${img.mimetype};base64,${img.buffer}`;
-        }
-        return img;
-      });
-    } else {
-      images = [parsed];
-    }
-  } catch (err) {
-    images = [product.images]; // fallback if not valid JSON
-  }
-}
-}
-
-if (Buffer.isBuffer(product.images)) {
-  const base64Image = product.images.toString('base64');
-  images = [`data:image/jpeg;base64,${base64Image}`];
-}
-
-      return {
-        ...product,
-        organic_certified,
-        terms_accepted,
-        images
-      };
-    });
-
-    res.status(200).json(formattedProducts);
+    res.status(200).json({ success: true, data: products });
   } catch (error) {
     console.error('Error fetching shop products:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    res.status(500).json({ error: 'Internal server error', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 };
 exports.getMyShopProducts = async (req, res) => {
   try {
     const products = await ShopProductModel.getAllByUserId(req.user.id);
-    
-    const formattedProducts = products.map(product => {
-      // Handle Boolean fields
-      const organic_certified = Boolean(product.organic_certified);
-      const terms_accepted = Boolean(product.terms_accepted);
-
-      let images = [];
-
-      // Case 1: If image is a Buffer (single image in BLOB column)
-      if (Buffer.isBuffer(product.images)) {
-        const base64Image = product.images.toString('base64');
-        images = [`data:image/jpeg;base64,${base64Image}`]; // or image/png if that's your format
-      }
-        // Case 2: Images is a string (could be JSON or comma-separated)
-         else if (typeof product.images === 'string') {
-        if (typeof product.images === 'string') {
-  try {
-    const parsed = JSON.parse(product.images);
-    if (Array.isArray(parsed)) {
-      images = parsed.map(img => {
-        if (img.buffer && img.mimetype) {
-          return `data:${img.mimetype};base64,${img.buffer}`;
-        }
-        return img;
-      });
-    } else {
-      images = [parsed];
-    }
-  } catch (err) {
-    images = [product.images]; // fallback if not valid JSON
-  }
-}
-}
-
-if (Buffer.isBuffer(product.images)) {
-  const base64Image = product.images.toString('base64');
-  images = [`data:image/jpeg;base64,${base64Image}`];
-}
-
-      return {
-        ...product,
-        organic_certified,
-        terms_accepted,
-        images
-      };
-    });
-    res.status(200).json({ 
-      success: true, 
-      data: formattedProducts
-    });
+    res.status(200).json({ success: true, data: products });
   } catch (error) {
     console.error('Error fetching shop products:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
 exports.getAllViewMyShopProducts = async (req, res) => {
   try {
-    const products = await ShopProductModel.getAllViewByUserId(req.user.id);
-    
-    const formattedProducts = products.map(product => {
-      // Handle Boolean fields
-      const organic_certified = Boolean(product.organic_certified);
-      const terms_accepted = Boolean(product.terms_accepted);
-
-      let images = [];
-      const imageData = product.images;
-
-      // Case 1: Image is a Buffer
-      if (Buffer.isBuffer(imageData)) {
-        const base64Image = imageData.toString('base64');
-        images = [`data:image/jpeg;base64,${base64Image}`];
-      } 
-      // Case 2: Image is a JSON string
-      else if (typeof imageData === 'string') {
-        try {
-          const parsed = JSON.parse(imageData);
-          if (Array.isArray(parsed)) {
-            images = parsed.map(img => {
-              if (img.buffer && img.mimetype) {
-                return `data:${img.mimetype};base64,${img.buffer}`;
-              }
-              return img.url || img; // Fallback to URL or raw data
-            });
-          } else {
-            images = [parsed.url || parsed]; // Handle single image
-          }
-        } catch (err) {
-          // If not JSON, treat as direct URL or base64 string
-          images = imageData.includes('http') || imageData.startsWith('data:image') 
-            ? [imageData] 
-            : [];
-        }
-      }
-      // Case 3: Image is already an array
-      else if (Array.isArray(imageData)) {
-        images = imageData;
-      }
-
-      return {
-        ...product,
-        organic_certified,
-        terms_accepted,
-        images: images.filter(img => img) // Remove empty values
-      };
-    });
-
-    res.status(200).json({ 
-      success: true, 
-      data: formattedProducts
-    });
+    // Return shop details for the view form (single object)
+    const shopDetails = await ShopProductModel.getShopDetailsByUserId(req.user.id);
+    if (!shopDetails) {
+      return res.status(200).json({ success: false, message: 'No shop details found' });
+    }
+    res.status(200).json({ success: true, data: shopDetails });
   } catch (error) {
-    console.error('Error fetching shop products:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Error fetching shop view data:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 };
 // Helper function
@@ -300,27 +193,17 @@ exports.getShopProductById = async (req, res) => {
     const product = await ShopProductModel.findById(req.params.shopitemid);
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
+      return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      product: {
-        id: product.id,
-        // Include only the ID or minimal essential fields
-        // Add other minimal fields if absolutely necessary
-      }
-    });
+    // Normalize boolean flags if present
+    if (product.organic_certified !== undefined) product.organic_certified = Boolean(product.organic_certified);
+    if (product.terms_accepted !== undefined) product.terms_accepted = Boolean(product.terms_accepted);
 
+    res.status(200).json({ success: true, product });
   } catch (error) {
     console.error('Error fetching product:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch product'
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch product', error: error.message });
   }
 };
 exports.deleteShopProduct = async (req, res) => {
@@ -354,9 +237,7 @@ exports.updateProduct = async (req, res) => {
   try {
     const { shopitemid } = req.params;
 
-    // Debug logs
-    console.log('Request body:', req.body);
-    console.log('Uploaded files count:', req.files?.length || 0);
+  // Debug logs removed in production
 
     // Initialize update data with sanitized fields
     const updateData = {
@@ -429,5 +310,35 @@ exports.updateProduct = async (req, res) => {
       success: false,
       message: err.message || 'Internal server error during update'
     });
+  }
+};
+
+exports.updateShopDetails = async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    const userId = req.user.id;
+    const allowed = ['shop_name','business_registration_number','shop_address','shop_phone_number','shop_email','shop_description','shop_category','operating_hours','opening_days','delivery_areas','latitude','longitude'];
+    const updates = {};
+    for (const k of allowed) {
+      if (req.body[k] !== undefined) updates[k] = req.body[k];
+    }
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, message: 'No valid fields provided' });
+
+    // Build update SQL
+    const parts = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    const values = Object.keys(updates).map(k => updates[k]);
+    values.push(userId);
+
+    const [result] = await pool.execute(`UPDATE shop_details SET ${parts} WHERE user_id = ?`, values);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'Shop not found' });
+
+    const [rows] = await pool.execute('SELECT * FROM shop_details WHERE user_id = ? LIMIT 1', [userId]);
+    const shop = rows && rows.length ? rows[0] : null;
+    return res.status(200).json({ success: true, data: shop });
+  } catch (err) {
+    console.error('Error updating shop details:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update shop details', error: err.message });
   }
 };

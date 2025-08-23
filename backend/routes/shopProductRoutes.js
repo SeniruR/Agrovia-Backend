@@ -26,6 +26,8 @@ router.get('/my-shop-view',
   authenticate, // This should add req.user
   shopProductController.getAllViewMyShopProducts
 );
+// Update shop details for authenticated shop owner
+router.put('/shop', authenticate, shopProductController.updateShopDetails);
 router.get('/', shopProductController.getAllShopProducts);
 //router.get('/:shopitemid', shopController.getItemById);
 router.delete('/:shopitemid', shopProductController.deleteShopProduct);

@@ -7,10 +7,14 @@ const { sendModeratorRejectionEmail, sendModeratorApprovalEmail, sendModeratorSu
 // GET /api/v1/moderators/accounts - get all moderator accounts (for admin approval UI)
 router.get('/accounts', async (req, res) => {
   try {
-    // Get all moderators (user_type = '5' or '5.1')
+    // Get all moderators (user_type = '5' or '5.1'), include disable_case_id
     const [rows] = await pool.execute(
-      `SELECT id, full_name, email, phone_number, district, nic, address, user_type, is_active, created_at, profile_image, profile_image_mime
-       FROM users WHERE user_type = '5' OR user_type = '5.1' ORDER BY created_at DESC`
+      `SELECT u.id, u.full_name, u.email, u.phone_number, u.district, u.nic, u.address, u.user_type, u.is_active, u.created_at, u.profile_image, u.profile_image_mime,
+              da.case_id AS disable_case_id
+       FROM users u
+       LEFT JOIN disable_accounts da ON u.id = da.user_id
+       WHERE u.user_type = '5' OR u.user_type = '5.1'
+       ORDER BY u.created_at DESC`
     );
 
     // For each moderator, fetch their skills
@@ -58,7 +62,8 @@ router.get('/accounts', async (req, res) => {
         is_active: row.is_active,
         created_at: formatDate(row.created_at),
         profile_picture,
-        skills: skills.map(skill => {
+  disable_case_id: row.disable_case_id,
+  skills: skills.map(skill => {
           if (skill.type_name === 'url') {
             return {
               type_name: skill.type_name,

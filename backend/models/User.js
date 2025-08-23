@@ -161,6 +161,25 @@ class User {
       throw error;
     }
   }
+
+  // Find users by type
+  static async findByType(user_type) {
+    const query = 'SELECT * FROM users WHERE user_type = ?';
+    const [rows] = await pool.execute(query, [user_type]);
+    return [rows];
+  }
+
+  // Set user active status
+  static async setActive(id, is_active) {
+    const query = 'UPDATE users SET is_active = ? WHERE id = ?';
+    await pool.execute(query, [is_active, id]);
+  }
+
+  // Delete user
+  static async delete(id) {
+    const query = 'DELETE FROM users WHERE id = ?';
+    await pool.execute(query, [id]);
+  }
 }
 
 module.exports = User;
