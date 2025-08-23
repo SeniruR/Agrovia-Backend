@@ -179,6 +179,66 @@ const createTables = async (connection) => {
     `);
 
     console.log('✅ Database tables created/verified successfully');
+    // Product categories table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS product_categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE
+      )
+    `);
+
+    // Products table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS products (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        shop_id INT NOT NULL,
+        product_name VARCHAR(255) NOT NULL,
+        brand_name VARCHAR(255),
+        description TEXT,
+        category_id INT,
+        image LONGBLOB,
+        image_mime VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (shop_id) REFERENCES shop_details(id) ON DELETE CASCADE,
+        FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Product inventory table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS product_inventory (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        product_id BIGINT NOT NULL,
+        unit_type VARCHAR(50) NOT NULL,
+        unit_price DECIMAL(10,2) NOT NULL,
+        quantity FLOAT NOT NULL,
+        is_available TINYINT(1) DEFAULT 1,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Product images table (for multiple images per product)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS product_images (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        product_id BIGINT NOT NULL,
+        image LONGBLOB,
+        image_mime VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Seed common product categories if not present
+    const defaultCategories = ['Seeds', 'Fertilizer', 'Chemical'];
+    for (const name of defaultCategories) {
+      try {
+        await connection.execute('INSERT IGNORE INTO product_categories (name) VALUES (?)', [name]);
+      } catch (err) {
+        // ignore duplicate or other insertion issues for seed
+      }
+    }
   } catch (error) {
     console.error('❌ Error creating tables:', error.message);
     throw error;
