@@ -247,5 +247,8 @@ const createTables = async (connection) => {
 
 module.exports = {
   pool,
-  testConnection
+  testConnection,
+  execute: pool.execute.bind(pool),
+  query: pool.query.bind(pool),
+  getConnection
 };

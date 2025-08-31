@@ -14,6 +14,8 @@ const moderatorRoutes = require('./moderatorRoutes');
 const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
+const cropReviewRoutes = require('./cropReviews');
+const testRoutes = require('./testRoutes');
 
 const organizationApprovalRoutes = require('./organizationApproval');
 const shopOwnerRoutes = require('./shopOwnerRoutes'); // <-- Require shopOwnerRoutes
