@@ -126,14 +126,17 @@ router.post('/register/transporter',
 // Get all transporter accounts
 router.get('/accounts', async (req, res) => {
   try {
+    // Get all transporter accounts and their disable_accounts case_id (if any)
     const [results] = await pool.query(`
       SELECT 
         u.id, u.full_name, u.email, u.phone_number, u.address, u.district, u.nic, u.is_active,
         u.profile_image, u.profile_image_mime,
         t.vehicle_type, t.vehicle_number, t.vehicle_capacity, t.capacity_unit, t.license_number, t.license_expiry, t.additional_info,
-        u.user_type, u.created_at
+        u.user_type, u.created_at,
+        da.case_id AS disable_case_id
       FROM users u
       JOIN transporter_details t ON u.id = t.user_id
+      LEFT JOIN disable_accounts da ON u.id = da.user_id
       WHERE u.user_type = 4
     `);
 
@@ -174,7 +177,8 @@ router.get('/accounts', async (req, res) => {
         additional_info: row.additional_info,
         profile_picture,
         user_type: userTypeLabel(row.user_type),
-        created_at: formatDate(row.created_at)
+        created_at: formatDate(row.created_at),
+        disable_case_id: row.disable_case_id // may be null
       };
     });
     res.json(processed);

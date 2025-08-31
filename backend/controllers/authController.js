@@ -203,6 +203,17 @@ const registerShopOwner = async (req, res, next) => {
     const result = await User.create(userData);
     const userId = result.user_id || result.insertId || result.id;
 
+    // After user is created, insert into disable_accounts with case_id = 6 (shop owner registration)
+    try {
+      await require('../config/database').pool.execute(
+        'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
+        [userId, 6]
+      );
+    } catch (disableErr) {
+      console.error('Failed to insert into disable_accounts for shop owner:', disableErr);
+      // Not fatal for registration, so do not throw
+    }
+
     // Insert shop owner-specific data
     await ShopOwner.create({
       user_id: userId,

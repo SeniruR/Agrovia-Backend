@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+// const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 
@@ -20,7 +20,13 @@ const routes = require('./routes');
 const orderRoutes = require('./routes/orders');
 
 // Create Express app
+const cors = require('cors');
 const app = express();
+// Enable CORS for frontend dev server
+app.use(cors({
+  origin: 'http://localhost:5174',
+  credentials: true
+}));
 const PORT = process.env.PORT || 5000;
 
 // Security middleware
@@ -32,7 +38,18 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  // allow common custom headers used by the frontend
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
+}));
+
+// Explicitly respond to preflight requests with the same CORS config to ensure
+// Access-Control-Allow-Headers contains our custom header names (some clients
+// require exact matches on preflight responses).
+app.options('*', cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
 }));
 // CORS configuration
 // app.use(cors({
@@ -44,12 +61,18 @@ app.use(cors({
 //   allowedHeaders: ['Content-Type', 'Authorization']
 // }));
 
-// Rate limiting: skip profile routes to avoid excessive 429 errors
-app.use((req, res, next) => {
-  const skipPaths = ['/api/v1/users/profile', '/api/v1/auth/profile'];
-  if (skipPaths.includes(req.path)) return next();
-  return generalLimiter(req, res, next);
-});
+// Rate limiting: in development we skip the general limiter entirely to avoid noisy 429s
+if (process.env.NODE_ENV === 'development') {
+  // No-op rate limiting in dev
+  app.use((req, res, next) => next());
+} else {
+  // In production/staging apply the general limiter but still skip sensitive profile endpoints
+  app.use((req, res, next) => {
+    const skipPaths = ['/api/v1/users/profile', '/api/v1/auth/profile'];
+    if (skipPaths.includes(req.path)) return next();
+    return generalLimiter(req, res, next);
+  });
+}
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
