@@ -99,6 +99,102 @@ router.get('/', authenticate, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch orders', error: err.message });
   }
 });
+
+// GET /api/v1/farmer/orders (fetch orders that include products by the authenticated farmer)
+router.get('/farmer/orders', authenticate, async (req, res) => {
+  try {
+    const farmerId = req.user.id;
+
+    // Find crop posts owned by this farmer
+    const [posts] = await db.execute(
+      `SELECT id FROM crop_posts WHERE farmer_id = ?`,
+      [farmerId]
+    );
+    const productIds = posts.map(p => p.id);
+    if (productIds.length === 0) return res.json({ success: true, data: [] });
+
+    // Find order_items that reference these products
+    const productPlaceholders = productIds.map(() => '?').join(',');
+    const [matchingItems] = await db.execute(
+      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage
+       FROM order_items WHERE productId IN (${productPlaceholders})`,
+      productIds
+    );
+
+    if (matchingItems.length === 0) return res.json({ success: true, data: [] });
+
+    const orderIds = Array.from(new Set(matchingItems.map(i => i.orderId)));
+    const orderPlaceholders = orderIds.map(() => '?').join(',');
+
+    // Fetch orders (include delivery fields so farmers can see buyer contact/pickup info)
+    const [orders] = await db.execute(
+      `SELECT id, orderId AS externalOrderId, status, totalAmount, currency, createdAt,
+              deliveryName, deliveryPhone, deliveryAddress, deliveryDistrict
+       FROM orders WHERE id IN (${orderPlaceholders}) ORDER BY createdAt DESC`,
+      orderIds
+    );
+
+    // Fetch transports for the relevant items
+    const itemIds = matchingItems.map(i => i.id);
+    const itemPlaceholders = itemIds.map(() => '?').join(',') || 'NULL';
+    const [transports] = await db.execute(
+      `SELECT ot.*, td.user_id as transporter_user_id, u.full_name as transporter_name, u.phone_number as transporter_phone
+       FROM order_transports ot
+       LEFT JOIN transporter_details td ON td.id = ot.transporter_id
+       LEFT JOIN users u ON td.user_id = u.id
+       WHERE ot.order_item_id IN (${itemPlaceholders})`,
+      itemIds
+    );
+
+    // Fetch product origin info for these products
+    const productMap = {};
+    if (productIds.length > 0) {
+      const [productsRows] = await db.execute(
+        `SELECT cp.id, cp.location, cp.district, cp.farmer_id, u.full_name as farmer_name, u.phone_number as farmer_phone
+         FROM crop_posts cp
+         LEFT JOIN users u ON cp.farmer_id = u.id
+         WHERE cp.id IN (${productPlaceholders})`,
+        productIds
+      );
+      for (const p of productsRows) productMap[p.id] = p;
+    }
+
+    // Group transports by order_item_id
+    const transportsByItem = {};
+    for (const t of transports || []) {
+      transportsByItem[t.order_item_id] = transportsByItem[t.order_item_id] || [];
+      transportsByItem[t.order_item_id].push(t);
+    }
+
+    // Attach transports and product origin to the matching items
+    const itemsWithTransports = matchingItems.map(item => ({
+      ...item,
+      transports: transportsByItem[item.id] || [],
+      productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
+      productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
+      productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
+      productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
+    }));
+
+    // Group items by orderId
+    const itemsByOrder = {};
+    itemsWithTransports.forEach(item => {
+      if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = [];
+      itemsByOrder[item.orderId].push(item);
+    });
+
+    // Attach items to each order (only the farmer's items)
+    const ordersWithProducts = orders.map(order => ({
+      ...order,
+      products: itemsByOrder[order.id] || []
+    }));
+
+    return res.json({ success: true, data: ordersWithProducts });
+  } catch (err) {
+    console.error('Error fetching farmer orders:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch farmer orders', error: err.message });
+  }
+});
 // POST /api/v1/orders
 router.post('/', authenticate, async (req, res) => {
   const connection = await db.getConnection();
