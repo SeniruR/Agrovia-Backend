@@ -13,7 +13,10 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Paths
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'trained_model.joblib')
+MODEL_DIR = os.path.dirname(__file__)
+MODEL_MODEL_PATH = os.path.join(MODEL_DIR, 'model.pkl')
+LE_CROP_PATH = os.path.join(MODEL_DIR, 'le_crop.pkl')
+LE_CATEGORY_PATH = os.path.join(MODEL_DIR, 'le_category.pkl')
 CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'daily-crop-prices.csv')
 
 def preprocess_data():
@@ -94,21 +97,19 @@ def train_model():
         print(f"Model trained successfully:")
         print(f"MAE: {mae:.2f}")
         print(f"RMSE: {rmse:.2f}")
-        
-        # Save the model and encoders
-        joblib.dump({
-            'model': model,
-            'le_crop': le_crop,
-            'le_category': le_category
-        }, MODEL_PATH)
-        
+
+        # Save the model and encoders as separate .pkl files
+        joblib.dump(model, MODEL_MODEL_PATH)
+        joblib.dump(le_crop, LE_CROP_PATH)
+        joblib.dump(le_category, LE_CATEGORY_PATH)
+
         return {
             "success": True,
             "mae": mae,
             "rmse": rmse,
             "samples": len(df)
         }
-        
+
     except Exception as e:
         return {"error": f"Error training model: {e}"}
 
@@ -116,13 +117,12 @@ def predict_price(crop_name, category_name, days=7):
     """Predict prices for the next days"""
     try:
         # Load the model and encoders
-        if not os.path.exists(MODEL_PATH):
-            return {"error": "Model not found. Please train the model first."}
-        
-        saved_data = joblib.load(MODEL_PATH)
-        model = saved_data['model']
-        le_crop = saved_data['le_crop']
-        le_category = saved_data['le_category']
+        if not (os.path.exists(MODEL_MODEL_PATH) and os.path.exists(LE_CROP_PATH) and os.path.exists(LE_CATEGORY_PATH)):
+            return {"error": "Model or encoders not found. Please run training first (python price_forecaster.py train)."}
+
+        model = joblib.load(MODEL_MODEL_PATH)
+        le_crop = joblib.load(LE_CROP_PATH)
+        le_category = joblib.load(LE_CATEGORY_PATH)
         
         # Get the current date
         current_date = datetime.now()
