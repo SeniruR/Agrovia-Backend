@@ -19,7 +19,7 @@ app.use(express.json());
 // Paths
 const MODEL_PATH = path.join(__dirname, 'ml/trained_model.joblib');
 const CSV_PATH = path.join(__dirname, '../data/daily-crop-prices.csv'); // Fixed path
-const PYTHON_SCRIPT = path.join(__dirname, '../ml/recommendation.py');
+const PYTHON_SCRIPT = path.join(__dirname, '../ml/price_forecaster.py');
 
 // Function to get available crops from CSV dynamically
 function getCropsFromCSV() {
