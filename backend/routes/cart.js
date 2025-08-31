@@ -63,8 +63,9 @@ router.put('/:id', authenticate, async (req, res) => {
     const { quantity } = req.body;
 
     if (quantity <= 0) {
-      // Remove item if quantity is zero or negative
-      await pool.execute(`DELETE FROM carts WHERE id = ? AND userId = ?`, [cartItemId, userId]);
+  // Remove dependent cart_transports first to avoid FK constraint errors, then remove the cart item
+  await pool.execute(`DELETE FROM cart_transports WHERE cart_item_id = ?`, [cartItemId]);
+  await pool.execute(`DELETE FROM carts WHERE id = ? AND userId = ?`, [cartItemId, userId]);
       return res.status(200).json({ success: true, message: 'Item removed from cart' });
     } else {
       // Update the quantity
@@ -88,6 +89,8 @@ router.delete('/:id', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const cartItemId = req.params.id;
+    // Remove dependent transport allocations first to satisfy FK constraints
+    await pool.execute(`DELETE FROM cart_transports WHERE cart_item_id = ?`, [cartItemId]);
     const [result] = await pool.execute(
       `DELETE FROM carts WHERE id = ? AND userId = ?`, [cartItemId, userId]
     );
@@ -105,6 +108,13 @@ router.delete('/:id', authenticate, async (req, res) => {
 router.delete('/', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
+    // Remove dependent transport allocations first to avoid FK constraint errors
+    await pool.execute(
+      `DELETE ct FROM cart_transports ct
+       JOIN carts c ON ct.cart_item_id = c.id
+       WHERE c.userId = ?`,
+      [userId]
+    );
     await pool.execute(`DELETE FROM carts WHERE userId = ?`, [userId]);
     res.status(200).json({ success: true, message: 'Cart cleared' });
   } catch (error) {
