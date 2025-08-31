@@ -14,6 +14,7 @@ const moderatorRoutes = require('./moderatorRoutes');
 const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
+const driverRoutes = require('./driverRoutes');
 const cropReviewRoutes = require('./cropReviews');
 const testRoutes = require('./testRoutes');
 
@@ -51,6 +52,7 @@ router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
 router.use('/shopowners', shopOwnerRoutes); // <-- Register shopOwnerRoutes
+router.use('/driver', driverRoutes);
 
 // Register admin routes
 router.use('/admin', require('./adminRoutes'));
