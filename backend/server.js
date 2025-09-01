@@ -1,8 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 // const cors = require('cors');
+
 const helmet = require('helmet');
 const path = require('path');
+const mimeTypes = require('mime-types');
 
 
 
@@ -81,12 +83,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files (uploaded documents and crop images)
 app.use('/uploads', cors(), express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
-    res.setHeader('Content-Type', mime.getType(filePath) || 'application/octet-stream');
+    res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
   }
 }));
 app.use('/uploads/crop-images', cors(), express.static(path.join(__dirname, 'uploads/crop-images'), {
   setHeaders: (res, filePath) => {
-    res.setHeader('Content-Type', mime.getType(filePath) || 'application/octet-stream');
+    res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
   }
 }));
 const shopProductRoutes = require('./routes/shopProductRoutes');

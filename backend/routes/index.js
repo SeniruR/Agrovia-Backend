@@ -53,6 +53,8 @@ router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
 router.use('/shopowners', shopOwnerRoutes); // <-- Register shopOwnerRoutes
 router.use('/driver', driverRoutes);
+// Register crop reviews route
+router.use('/crop-reviews', cropReviewRoutes);
 
 // Register admin routes
 router.use('/admin', require('./adminRoutes'));
