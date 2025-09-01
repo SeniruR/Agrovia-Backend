@@ -11,8 +11,8 @@ exports.getDeliveriesForTransporter = async (req, res) => {
         ot.id AS order_transport_id,
         ot.order_item_id,
         oi.id AS order_item_id,
-        oi.productName, oi.quantity, oi.productUnit,
-        o.id AS order_id, o.orderId AS externalOrderId, o.status,
+        oi.productName, oi.quantity, oi.productUnit, oi.status,
+        o.id AS order_id, o.orderId AS externalOrderId,
         o.deliveryName, o.deliveryPhone, o.deliveryAddress, o.deliveryDistrict,
   cp.location AS pickupLocation, cp.district AS pickupDistrict,
   u_farmer.full_name AS farmerName, u_farmer.phone_number AS farmerPhone,
@@ -90,5 +90,165 @@ exports.getDeliveriesForTransporter = async (req, res) => {
   } catch (err) {
     console.error('Error fetching driver deliveries:', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch deliveries', error: err.message });
+  }
+};
+
+// PATCH /api/v1/driver/deliveries/:id/status
+// Updates the status of an order item (delivery) for the authenticated transporter
+exports.updateDeliveryStatus = async (req, res) => {
+  try {
+    const { id } = req.params; // This is the order_transport_id
+    const { status } = req.body;
+    const transporterUserId = req.user.id;
+
+    console.log(`🚚 STATUS UPDATE REQUEST: transport_id=${id}, new_status="${status}", user_id=${transporterUserId}`);
+
+    // Validate status
+    const validStatuses = ['pending', 'in-progress', 'completed', 'delivered', 'cancelled'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+      });
+    }
+
+    // First verify that this order_transport belongs to the authenticated transporter
+    const verifySql = `
+      SELECT ot.order_item_id, oi.id
+      FROM order_transports ot
+      JOIN order_items oi ON oi.id = ot.order_item_id
+      LEFT JOIN transporter_details td ON (td.id = ot.transporter_id OR td.id = ot.transport_id)
+      WHERE ot.id = ? AND td.user_id = ?
+    `;
+
+    const [verifyRows] = await pool.execute(verifySql, [id, transporterUserId]);
+
+    if (verifyRows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Delivery not found or not assigned to you' 
+      });
+    }
+
+    const orderItemId = verifyRows[0].order_item_id;
+
+    console.log(`✅ Verified: order_transport_id=${id} -> order_item_id=${orderItemId}`);
+
+    // Update the order_items status
+    const updateSql = `
+      UPDATE order_items 
+      SET status = ? 
+      WHERE id = ?
+    `;
+
+    console.log(`🔄 Updating order_items: SET status='${status}' WHERE id=${orderItemId}`);
+    const [updateResult] = await pool.execute(updateSql, [status, orderItemId]);
+    console.log(`📝 Update result:`, updateResult);
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update delivery status' 
+      });
+    }
+
+    console.log(`✅ Successfully updated order_item ${orderItemId} to status: ${status}`);
+
+    return res.json({ 
+      success: true, 
+      message: 'Delivery status updated successfully',
+      data: {
+        order_transport_id: id,
+        order_item_id: orderItemId,
+        new_status: status
+      }
+    });
+
+  } catch (err) {
+    console.error('Error updating delivery status:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update delivery status', 
+      error: err.message 
+    });
+  }
+};
+
+// DELETE /api/v1/driver/deliveries/:id
+// Deletes a completed delivery for the authenticated transporter
+exports.deleteDelivery = async (req, res) => {
+  try {
+    const { id } = req.params; // This is the order_transport_id
+    const transporterUserId = req.user.id;
+
+    console.log(`🗑️ DELETE REQUEST: transport_id=${id}, user_id=${transporterUserId}`);
+
+    // First verify that this order_transport belongs to the authenticated transporter
+    // and that the delivery is completed
+    const verifySql = `
+      SELECT ot.order_item_id, oi.id, oi.status
+      FROM order_transports ot
+      JOIN order_items oi ON oi.id = ot.order_item_id
+      LEFT JOIN transporter_details td ON (td.id = ot.transporter_id OR td.id = ot.transport_id)
+      WHERE ot.id = ? AND td.user_id = ?
+    `;
+
+    const [verifyRows] = await pool.execute(verifySql, [id, transporterUserId]);
+
+    if (verifyRows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Delivery not found or not assigned to you' 
+      });
+    }
+
+    const orderItemId = verifyRows[0].order_item_id;
+    const currentStatus = verifyRows[0].status;
+
+    // Only allow deletion of completed deliveries
+    if (currentStatus !== 'completed' && currentStatus !== 'delivered') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Only completed deliveries can be deleted' 
+      });
+    }
+
+    console.log(`✅ Verified: order_transport_id=${id} -> order_item_id=${orderItemId}, status=${currentStatus}`);
+
+    // Delete the order_transport record (this will remove it from driver's list)
+    const deleteSql = `
+      DELETE FROM order_transports 
+      WHERE id = ?
+    `;
+
+    console.log(`🗑️ Deleting order_transport: id=${id}`);
+    const [deleteResult] = await pool.execute(deleteSql, [id]);
+    console.log(`📝 Delete result:`, deleteResult);
+
+    if (deleteResult.affectedRows === 0) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to delete delivery' 
+      });
+    }
+
+    console.log(`✅ Successfully deleted order_transport ${id}`);
+
+    return res.json({ 
+      success: true, 
+      message: 'Delivery deleted successfully',
+      data: {
+        order_transport_id: id,
+        order_item_id: orderItemId
+      }
+    });
+
+  } catch (err) {
+    console.error('Error deleting delivery:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to delete delivery', 
+      error: err.message 
+    });
   }
 };
