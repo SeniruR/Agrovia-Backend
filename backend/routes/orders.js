@@ -24,7 +24,7 @@ router.get('/', authenticate, async (req, res) => {
     }
     const placeholders = orderIds.map(() => '?').join(',');
     const [items] = await db.execute(
-      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage
+      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage, status
        FROM order_items WHERE orderId IN (${placeholders})`,
       orderIds
     );
@@ -67,19 +67,41 @@ router.get('/', authenticate, async (req, res) => {
       transportsByItem[t.order_item_id].push(t);
     }
 
+    // Helper to canonicalize status values into: 'pending' | 'collecting' | 'in-progress' | 'completed'
+    const canonicalizeStatus = (s) => {
+      if (!s) return 'pending';
+      const st = String(s).toLowerCase().trim();
+      if (st.includes('collect') || st.includes('assigned') || st.includes('on-the-way') || st.includes('on_the_way')) return 'collecting';
+      if (st.includes('collected')) return 'in-progress';
+      if (st.includes('complete') || st === 'delivered') return 'completed';
+      if (st.includes('in-progress') || st.includes('inprogress') || st.includes('in progress') || st.includes('deliver') || st.includes('in-transit') || st.includes('transit')) return 'in-progress';
+      return 'pending';
+    };
+
     // Attach transports and product origin to items
     // Prefer snapshot values stored on order_items (farmerName, location) when present,
     // otherwise fall back to current values from crop_posts -> users (productMap).
-    const itemsWithTransports = items.map(item => ({
-      ...item,
-      transports: transportsByItem[item.id] || [],
-  // Always prefer authoritative location/district from crop_posts (productMap)
-  productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
-  productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
-      productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
-      // Note: order_items currently doesn't store farmer phone; use productMap when available.
-      productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
-    }));
+    const itemsWithTransports = items.map(item => {
+      const itemTransports = transportsByItem[item.id] || [];
+      const primaryTransport = itemTransports && itemTransports.length > 0 ? itemTransports[0] : null;
+      // try common transport status fields on the transport row
+      const transportRawStatus = primaryTransport ? (primaryTransport.status || primaryTransport.transport_status || primaryTransport.order_transport_status || primaryTransport.delivery_status || primaryTransport.transporter_status) : null;
+      // final item status: prefer the order_items.status column, otherwise fallback to transport status
+      const finalRaw = item.status || transportRawStatus || null;
+      const finalStatus = canonicalizeStatus(finalRaw);
+      return {
+        ...item,
+        status: finalStatus,
+        transports: itemTransports,
+        _transport_raw_status: transportRawStatus,
+        // Always prefer authoritative location/district from crop_posts (productMap)
+        productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
+        productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
+        productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
+        // Note: order_items currently doesn't store farmer phone; use productMap when available.
+        productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
+      };
+    });
 
     // Group items by their orderId
     const itemsByOrder = {};
@@ -116,7 +138,7 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
     // Find order_items that reference these products
     const productPlaceholders = productIds.map(() => '?').join(',');
     const [matchingItems] = await db.execute(
-      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage
+      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage, status
        FROM order_items WHERE productId IN (${productPlaceholders})`,
       productIds
     );
@@ -166,15 +188,36 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
       transportsByItem[t.order_item_id].push(t);
     }
 
+    // Helper to canonicalize status values into: 'pending' | 'collecting' | 'in-progress' | 'completed'
+    // (reuse same logic for farmer endpoint)
+    const canonicalizeStatus_farmer = (s) => {
+      if (!s) return 'pending';
+      const st = String(s).toLowerCase().trim();
+      if (st.includes('collect') || st.includes('assigned') || st.includes('on-the-way') || st.includes('on_the_way')) return 'collecting';
+      if (st.includes('collected')) return 'in-progress';
+      if (st.includes('complete') || st === 'delivered') return 'completed';
+      if (st.includes('in-progress') || st.includes('inprogress') || st.includes('in progress') || st.includes('deliver') || st.includes('in-transit') || st.includes('transit')) return 'in-progress';
+      return 'pending';
+    };
+
     // Attach transports and product origin to the matching items
-    const itemsWithTransports = matchingItems.map(item => ({
-      ...item,
-      transports: transportsByItem[item.id] || [],
-      productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
-      productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
-      productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
-      productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
-    }));
+    const itemsWithTransports = matchingItems.map(item => {
+      const itemTransports = transportsByItem[item.id] || [];
+      const primaryTransport = itemTransports && itemTransports.length > 0 ? itemTransports[0] : null;
+      const transportRawStatus = primaryTransport ? (primaryTransport.status || primaryTransport.transport_status || primaryTransport.order_transport_status || primaryTransport.delivery_status || primaryTransport.transporter_status) : null;
+      const finalRaw = item.status || transportRawStatus || null;
+      const finalStatus = canonicalizeStatus_farmer(finalRaw);
+      return {
+        ...item,
+        status: finalStatus,
+        transports: itemTransports,
+        _transport_raw_status: transportRawStatus,
+        productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
+        productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
+        productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
+        productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
+      };
+    });
 
     // Group items by orderId
     const itemsByOrder = {};

@@ -39,13 +39,16 @@ exports.getDeliveriesForTransporter = async (req, res) => {
     const [rows] = await pool.execute(sql, [transporterUserId]);
 
     // Map rows to a clean delivery object for frontend
-    // Helper to normalize various order status values into the UI buckets
+    // Helper to normalize various order status values into the four canonical statuses:
+    // 'pending' | 'collecting' | 'in-progress' | 'completed'
     const normalizeStatus = (s) => {
       if (!s) return 'pending';
-      const st = String(s).toLowerCase();
+      const st = String(s).toLowerCase().trim();
+      if (st.includes('collect') || st.includes('assigned') || st.includes('on-the-way') || st.includes('on_the_way')) return 'collecting';
+      if (st.includes('collected') ) return 'in-progress';
       if (st.includes('complete') || st === 'delivered') return 'completed';
-      if (st.includes('in-progress') || st.includes('inprogress') || st.includes('in progress') || st.includes('in-transit') || st.includes('transit')) return 'in-progress';
-      // Treat paid/paid-like or processing as pending for driver workflow
+      if (st.includes('in-progress') || st.includes('inprogress') || st.includes('in progress') || st.includes('deliver') || st.includes('in-transit') || st.includes('transit')) return 'in-progress';
+      // Default to pending
       return 'pending';
     };
 
@@ -101,14 +104,26 @@ exports.updateDeliveryStatus = async (req, res) => {
     const { status } = req.body;
     const transporterUserId = req.user.id;
 
-    console.log(`🚚 STATUS UPDATE REQUEST: transport_id=${id}, new_status="${status}", user_id=${transporterUserId}`);
+    console.log(`🚚 STATUS UPDATE REQUEST: transport_id=${id}, raw_status="${status}", user_id=${transporterUserId}`);
 
-    // Validate status
-    const validStatuses = ['pending', 'in-progress', 'completed', 'delivered', 'cancelled'];
-    if (!status || !validStatuses.includes(status)) {
+    // Normalize incoming status to the four canonical statuses before persisting
+    const canonicalizeIncomingStatus = (s) => {
+      if (!s) return null;
+      const st = String(s).toLowerCase().trim();
+      if (st.includes('collect')) return 'collecting';
+      if (st.includes('collected')) return 'in-progress';
+      if (st.includes('complete') || st === 'delivered') return 'completed';
+      if (st.includes('in-progress') || st.includes('inprogress') || st.includes('in progress') || st.includes('deliver')) return 'in-progress';
+      if (st.includes('pending') || st === 'new' || st === 'created' || st === 'assigned') return 'pending';
+      return null;
+    };
+
+    const newStatus = canonicalizeIncomingStatus(status);
+    const validStatuses = ['pending', 'collecting', 'in-progress', 'completed'];
+    if (!newStatus || !validStatuses.includes(newStatus)) {
       return res.status(400).json({ 
         success: false, 
-        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+        message: `Invalid status. Must map to one of: ${validStatuses.join(', ')}` 
       });
     }
 
@@ -141,8 +156,8 @@ exports.updateDeliveryStatus = async (req, res) => {
       WHERE id = ?
     `;
 
-    console.log(`🔄 Updating order_items: SET status='${status}' WHERE id=${orderItemId}`);
-    const [updateResult] = await pool.execute(updateSql, [status, orderItemId]);
+  console.log(`🔄 Updating order_items: SET status='${newStatus}' WHERE id=${orderItemId}`);
+  const [updateResult] = await pool.execute(updateSql, [newStatus, orderItemId]);
     console.log(`📝 Update result:`, updateResult);
 
     if (updateResult.affectedRows === 0) {
@@ -152,7 +167,7 @@ exports.updateDeliveryStatus = async (req, res) => {
       });
     }
 
-    console.log(`✅ Successfully updated order_item ${orderItemId} to status: ${status}`);
+  console.log(`✅ Successfully updated order_item ${orderItemId} to status: ${newStatus}`);
 
     return res.json({ 
       success: true, 
@@ -205,8 +220,9 @@ exports.deleteDelivery = async (req, res) => {
     const orderItemId = verifyRows[0].order_item_id;
     const currentStatus = verifyRows[0].status;
 
-    // Only allow deletion of completed deliveries
-    if (currentStatus !== 'completed' && currentStatus !== 'delivered') {
+  // Only allow deletion of completed deliveries (normalize current status first)
+  const currentNormalized = normalizeStatus(currentStatus);
+  if (currentNormalized !== 'completed') {
       return res.status(400).json({ 
         success: false, 
         message: 'Only completed deliveries can be deleted' 
