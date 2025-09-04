@@ -1,8 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 // const cors = require('cors');
+
 const helmet = require('helmet');
 const path = require('path');
+const mimeTypes = require('mime-types');
 
 
 
@@ -79,13 +81,22 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files (uploaded documents and crop images)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/uploads/crop-images', express.static(path.join(__dirname, 'uploads/crop-images')));
+app.use('/uploads', cors(), express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
+  }
+}));
+app.use('/uploads/crop-images', cors(), express.static(path.join(__dirname, 'uploads/crop-images'), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
+  }
+}));
 const shopProductRoutes = require('./routes/shopProductRoutes');
-
+// Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
+const transportAllocationRoutes = require('./routes/TransportRoutes');
+app.use('/api/transport-allocations', transportAllocationRoutes);
 
 app.use('/api/v1/shop-products', shopProductRoutes);
-
 // API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);

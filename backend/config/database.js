@@ -245,7 +245,16 @@ const createTables = async (connection) => {
   }
 };
 
+
+// Add getConnection helper for compatibility
+const getConnection = async () => {
+  return await pool.getConnection();
+};
+
 module.exports = {
   pool,
-  testConnection
+  testConnection,
+  execute: pool.execute.bind(pool),
+  query: pool.query.bind(pool),
+  getConnection
 };

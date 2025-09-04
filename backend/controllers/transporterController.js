@@ -95,4 +95,17 @@ const registerTransporter = async (req, res, next) => {
   }
 };
 
-module.exports = { registerTransporter };
+const getAllTransporters = async (req, res, next) => {
+  try {
+    const transporters = await Transporter.getAll();
+    res.status(200).json({ 
+      success: true, 
+      message: 'Transporters retrieved successfully', 
+      data: transporters 
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { registerTransporter, getAllTransporters };
