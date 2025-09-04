@@ -21,6 +21,9 @@ const routes = require('./routes');
 // Import order routes
 const orderRoutes = require('./routes/orders');
 
+// Import admin routes
+const adminRoutes = require('./routes/adminRoutes');
+
 // Create Express app
 const cors = require('cors');
 const app = express();
@@ -100,6 +103,7 @@ app.use('/api/v1/shop-products', shopProductRoutes);
 // API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
