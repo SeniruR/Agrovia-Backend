@@ -8,7 +8,8 @@ class ShopComplaint {
       description,
       submittedBy,
       priority,
-      shopName,
+      shopId,
+      userId,
       location,
       category,
       orderNumber,
@@ -23,8 +24,8 @@ class ShopComplaint {
 
     const query = `
       INSERT INTO shop_complaints
-        (title, description, submitted_by, priority, shop_name, location, category, order_number, purchase_date, attachments, submitted_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, priority, shop_id, location, category, order_number, purchase_date, attachments, submitted_at, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
@@ -32,13 +33,14 @@ class ShopComplaint {
         description ?? null,
         submittedBy ?? null,
         priority ?? null,
-        shopName ?? null,
+        shopId ?? null,
         location ?? null,
         category ?? null,
         orderNumber ?? null,
         purchaseDate ? purchaseDate : null,
         attachmentsStr,
-        new Date() // submitted_at as current timestamp
+        new Date(), // submitted_at as current timestamp
+        userId ?? null
       ]);
       return result;
     } catch (error) {
@@ -82,17 +84,26 @@ class ShopComplaint {
 
   // Get complaint by ID
   static async findById(id) {
-    const query = 'SELECT * FROM shop_complaints WHERE id = ?';
+    // Include submitter name and shop details with a more flexible join
+    // Try to match on user_id first, but if that fails, also try matching on submitted_by
+    const query = `
+      SELECT sc.*, 
+        COALESCE(u.full_name, u2.full_name) AS submittedByName, 
+        s.shop_name AS shopName, s.shop_address AS shopAddress
+      FROM shop_complaints sc
+      LEFT JOIN users u ON sc.user_id = u.id
+      LEFT JOIN users u2 ON (sc.user_id IS NULL OR sc.user_id = 0) AND sc.submitted_by = u2.id
+      LEFT JOIN shop_details s ON sc.shop_id = s.id
+      WHERE sc.id = ?
+    `;
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;
-      
-      // Create result object with base data
-      let result = { ...rows[0] };
-      
+      const row = rows[0];
+      // Combine base data with joined fields
+      let resultObj = { ...row };
       // Debug the raw attachments data first
-      if (rows[0].attachments) {
-        console.log('Raw attachments data type:', typeof rows[0].attachments);
+      if (row.attachments) {
         if (Buffer.isBuffer(rows[0].attachments)) {
           console.log('Attachments is a Buffer, length:', rows[0].attachments.length);
         } else if (typeof rows[0].attachments === 'string') {
@@ -102,18 +113,17 @@ class ShopComplaint {
       }
       
       // Process attachments field if it exists
-      if (rows[0].attachments) {
+      if (row.attachments) {
         try {
-          // First try to parse as JSON (for cases when it's stored as a JSON string)
-          const parsed = JSON.parse(rows[0].attachments); 
+          const parsed = JSON.parse(row.attachments);
           console.log('Successfully parsed attachments as JSON');
           
           // If we have one attachment, put it in the image field
           if (Array.isArray(parsed) && parsed.length === 1) {
-            result.image = parsed[0];
+            resultObj.image = parsed[0];
             console.log('Using single item from parsed JSON array');
           } else if (Array.isArray(parsed) && parsed.length > 1) {
-            result.images = parsed;
+            resultObj.images = parsed;
             console.log('Using multiple items from parsed JSON array');
           }
         } catch (e) {
@@ -124,17 +134,17 @@ class ShopComplaint {
           if (typeof rows[0].attachments === 'string') {
             // Clean the string (remove any wrapping quotes, etc.)
             let cleanedData = rows[0].attachments.replace(/^["']+|["']+$/g, '');
-            result.image = cleanedData;
+            resultObj.image = cleanedData;
             console.log('Using direct string data as image, length:', cleanedData.length);
           } else if (Buffer.isBuffer(rows[0].attachments)) {
             // It's a Buffer, convert to base64
-            result.image = rows[0].attachments.toString('base64');
-            console.log('Converted Buffer to base64 string, length:', result.image.length);
+            resultObj.image = rows[0].attachments.toString('base64');
+            console.log('Converted Buffer to base64 string, length:', resultObj.image.length);
           }
         }
       }
       
-      return result;
+      return resultObj;
     } catch (error) {
       console.error('Error in ShopComplaint.findById:', error);
       throw error;

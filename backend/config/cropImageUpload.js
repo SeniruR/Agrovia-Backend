@@ -1,29 +1,9 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
-// Ensure crop images directory exists
-const cropImagesDir = path.join(__dirname, '../uploads/crop-images');
-if (!fs.existsSync(cropImagesDir)) {
-  fs.mkdirSync(cropImagesDir, { recursive: true });
-}
+const storage = multer.memoryStorage();
 
-// Configure storage for crop images
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, cropImagesDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `crop-${uniqueSuffix}${ext}`);
-  }
-});
-
-// File filter for crop images
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -31,7 +11,6 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer for crop images
 const cropImageUpload = multer({
   storage: storage,
   limits: {

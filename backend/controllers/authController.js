@@ -194,12 +194,25 @@ const registerShopOwner = async (req, res, next) => {
       district,
       nic,
       address: address || null,
+      latitude: req.body.latitude !== undefined ? req.body.latitude : (req.body.personalLatitude !== undefined ? req.body.personalLatitude : null),
+      longitude: req.body.longitude !== undefined ? req.body.longitude : (req.body.personalLongitude !== undefined ? req.body.personalLongitude : null),
       profile_image: profileImageFile ? profileImageFile.buffer : null,
       profile_image_mime: profileImageFile ? profileImageFile.mimetype : null,
       user_type: 3 // 3 = shop owner
     };
     const result = await User.create(userData);
     const userId = result.user_id || result.insertId || result.id;
+
+    // After user is created, insert into disable_accounts with case_id = 6 (shop owner registration)
+    try {
+      await require('../config/database').pool.execute(
+        'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, ?, NOW())',
+        [userId, 6]
+      );
+    } catch (disableErr) {
+      console.error('Failed to insert into disable_accounts for shop owner:', disableErr);
+      // Not fatal for registration, so do not throw
+    }
 
     // Insert shop owner-specific data
     await ShopOwner.create({
@@ -214,6 +227,8 @@ const registerShopOwner = async (req, res, next) => {
       operating_hours,
       opening_days,
       delivery_areas,
+      latitude: req.body.shop_latitude !== undefined ? req.body.shop_latitude : null,
+      longitude: req.body.shop_longitude !== undefined ? req.body.shop_longitude : null,
       shop_license: shopLicenseFile ? shopLicenseFile.buffer : null,
       shop_license_mime: shopLicenseFile ? shopLicenseFile.mimetype : null,
       shop_image: shopImageFile ? shopImageFile.buffer : null,
@@ -238,7 +253,9 @@ const registerBuyer = async (req, res, next) => {
       company_name,
       company_type,
       company_address,
-      payment_offer
+      payment_offer,
+      company_latitude,
+      company_longitude
     } = req.body;
 
     // Check if user already exists
@@ -275,7 +292,9 @@ const registerBuyer = async (req, res, next) => {
       phone_number: contact_number,
       district,
       nic: nic_number,
-      address: company_address || null,
+      address: req.body.address || null,
+      latitude: req.body.latitude !== undefined ? req.body.latitude : null,
+      longitude: req.body.longitude !== undefined ? req.body.longitude : null,
       profile_image,
       profile_image_mime,
       user_type: 2 // 2 = buyer
@@ -292,6 +311,8 @@ const registerBuyer = async (req, res, next) => {
       company_name,
       company_type,
       company_address,
+      company_latitude: company_latitude !== undefined ? company_latitude : null,
+      company_longitude: company_longitude !== undefined ? company_longitude : null,
       profile_image,
       profile_image_mime,
       payment_offer
@@ -341,7 +362,9 @@ const registerFarmer = async (req, res, next) => {
       district,
       land_size,
       nic_number,
-      organization_id
+      organization_id,
+      latitude,
+      longitude
     } = req.body;
 
     // Check if user already exists
@@ -397,7 +420,9 @@ const registerFarmer = async (req, res, next) => {
       cultivated_crops: req.body.cultivated_crops || null,
       irrigation_system: req.body.irrigation_system || null,
       soil_type: req.body.soil_type || null,
-      farming_certifications: req.body.farming_certifications || null
+      farming_certifications: req.body.farming_certifications || null,
+      latitude: latitude !== undefined ? latitude : null,
+      longitude: longitude !== undefined ? longitude : null
     };
 
     const result = await User.create(userData);

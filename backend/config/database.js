@@ -106,6 +106,31 @@ const createTables = async (connection) => {
       )
     `);
 
+    // Shop details table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS shop_details (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT UNSIGNED NOT NULL,
+        shop_name VARCHAR(255) NOT NULL,
+        business_registration_number VARCHAR(100),
+        shop_address TEXT,
+        shop_phone_number VARCHAR(20),
+        shop_email VARCHAR(255),
+        shop_description TEXT,
+        shop_category VARCHAR(100),
+        operating_hours VARCHAR(100),
+        opening_days VARCHAR(255),
+        delivery_areas TEXT,
+        shop_license BLOB,
+        shop_image BLOB,
+        shop_image_mime VARCHAR(45),
+        shop_license_mime VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for better performance (MySQL compatible way)
     try {
       await connection.execute(`CREATE INDEX idx_users_email ON users(email)`);
@@ -154,13 +179,82 @@ const createTables = async (connection) => {
     `);
 
     console.log('✅ Database tables created/verified successfully');
+    // Product categories table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS product_categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE
+      )
+    `);
+
+    // Products table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS products (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        shop_id INT NOT NULL,
+        product_name VARCHAR(255) NOT NULL,
+        brand_name VARCHAR(255),
+        description TEXT,
+        category_id INT,
+        image LONGBLOB,
+        image_mime VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (shop_id) REFERENCES shop_details(id) ON DELETE CASCADE,
+        FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE SET NULL
+      )
+    `);
+
+    // Product inventory table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS product_inventory (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        product_id BIGINT NOT NULL,
+        unit_type VARCHAR(50) NOT NULL,
+        unit_price DECIMAL(10,2) NOT NULL,
+        quantity FLOAT NOT NULL,
+        is_available TINYINT(1) DEFAULT 1,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Product images table (for multiple images per product)
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS product_images (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        product_id BIGINT NOT NULL,
+        image LONGBLOB,
+        image_mime VARCHAR(45),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Seed common product categories if not present
+    const defaultCategories = ['Seeds', 'Fertilizer', 'Chemical'];
+    for (const name of defaultCategories) {
+      try {
+        await connection.execute('INSERT IGNORE INTO product_categories (name) VALUES (?)', [name]);
+      } catch (err) {
+        // ignore duplicate or other insertion issues for seed
+      }
+    }
   } catch (error) {
     console.error('❌ Error creating tables:', error.message);
     throw error;
   }
 };
 
+
+// Add getConnection helper for compatibility
+const getConnection = async () => {
+  return await pool.getConnection();
+};
+
 module.exports = {
   pool,
-  testConnection
+  testConnection,
+  execute: pool.execute.bind(pool),
+  query: pool.query.bind(pool),
+  getConnection
 };

@@ -10,11 +10,16 @@ const cropPostRoutes = require('./cropPosts');
 const userRoutes = require('./users');
 const shopComplaintRoutes = require('./shopComplaint');
 const transporterRoutes = require('./transporterRoutes');
+const moderatorRoutes = require('./moderatorRoutes');
 const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
+const driverRoutes = require('./driverRoutes');
+const cropReviewRoutes = require('./cropReviews');
+const testRoutes = require('./testRoutes');
 
 const organizationApprovalRoutes = require('./organizationApproval');
+const shopOwnerRoutes = require('./shopOwnerRoutes'); // <-- Require shopOwnerRoutes
 // (undo) removed disableAccounts route registration
 const router = express.Router();
 
@@ -38,11 +43,21 @@ router.use('/farmers', farmerRoutes);
 router.use('/shop-products', shopProductRoutes);
 router.use('/crop-posts', cropPostRoutes);
 router.use('/users', userRoutes);
+// Shop search endpoint for live-search dropdowns
+router.use('/shops', require('./shops'));
 router.use('/shop-complaints', shopComplaintRoutes);
 router.use('/transporters', transporterRoutes);
+router.use('/moderators', moderatorRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
+router.use('/shopowners', shopOwnerRoutes); // <-- Register shopOwnerRoutes
+router.use('/driver', driverRoutes);
+// Register crop reviews route
+router.use('/crop-reviews', cropReviewRoutes);
+
+// Register admin routes
+router.use('/admin', require('./adminRoutes'));
 
 // Mount proxy routes
 const proxyRoutes = require('./proxy');

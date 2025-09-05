@@ -75,7 +75,7 @@ module.exports = (req, res, next) => {
     // Validate required fields
     const requiredFields = [
       'shop_name', 'owner_name', 'email', 'phone_no', 
-      'shop_address', 'city', 'product_type', 'product_name',
+      'shop_address', 'product_type', 'product_name',
       'price', 'unit', 'product_description',
       'organic_certified', 'terms_accepted'
     ];

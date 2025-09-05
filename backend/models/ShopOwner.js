@@ -25,8 +25,8 @@ class ShopOwner {
 
     const query = `
       INSERT INTO shop_details (
-        user_id, shop_name, business_registration_number, shop_address, shop_phone_number, shop_email, shop_description, shop_category, operating_hours, opening_days, delivery_areas, shop_license, shop_license_mime, shop_image, shop_image_mime
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        user_id, shop_name, business_registration_number, shop_address, shop_phone_number, shop_email, shop_description, shop_category, operating_hours, opening_days, delivery_areas, latitude, longitude, shop_license, shop_license_mime, shop_image, shop_image_mime
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const values = [
       user_id,
@@ -40,6 +40,8 @@ class ShopOwner {
       operating_hours ?? null,
       Array.isArray(opening_days) ? opening_days.join(',') : (opening_days ?? null),
       delivery_areas ?? null,
+      shopOwnerData.latitude ?? null,
+      shopOwnerData.longitude ?? null,
       shop_license ?? null,
       shop_license_mime ?? null,
       shop_image ?? null,

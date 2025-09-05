@@ -23,20 +23,24 @@ class User {
       cultivated_crops,
       irrigation_system,
       soil_type,
-      farming_certifications
+      farming_certifications,
+      latitude,
+      longitude
     } = userData;
 
     const userQuery = `
       INSERT INTO users (
         full_name, email, password_hash, phone_number, district, nic,
-        address, profile_image, profile_image_mime, user_type, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        address, profile_image, profile_image_mime, user_type, is_active,
+        latitude, longitude
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     // Set is_active=1 for buyers (user_type=2), 0 for others
     const isActive = user_type === 2 ? 1 : 0;
     const userValues = [
       full_name, email, password_hash, phone_number, district, nic,
-      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, isActive
+      address ?? null, profile_image ?? null, profile_image_mime ?? null, user_type, isActive,
+      latitude ?? null, longitude ?? null
     ];
 
     try {
@@ -156,6 +160,25 @@ class User {
     } catch (error) {
       throw error;
     }
+  }
+
+  // Find users by type
+  static async findByType(user_type) {
+    const query = 'SELECT * FROM users WHERE user_type = ?';
+    const [rows] = await pool.execute(query, [user_type]);
+    return [rows];
+  }
+
+  // Set user active status
+  static async setActive(id, is_active) {
+    const query = 'UPDATE users SET is_active = ? WHERE id = ?';
+    await pool.execute(query, [is_active, id]);
+  }
+
+  // Delete user
+  static async delete(id) {
+    const query = 'DELETE FROM users WHERE id = ?';
+    await pool.execute(query, [id]);
   }
 }
 
