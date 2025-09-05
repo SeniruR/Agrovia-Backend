@@ -544,6 +544,14 @@ router.get('/user-subscriptions/:userId/:userType', async (req, res) => {
 
     const subscription = subscriptions[0];
     
+    // Get tier options for this subscription's tier
+    const [tierOptions] = await db.execute(`
+      SELECT tier_opt.option_id, tier_opt.value, od.name as option_name, od.type as option_type
+      FROM tier_options tier_opt
+      JOIN option_definitions od ON tier_opt.option_id = od.id
+      WHERE tier_opt.tier_id = ?
+    `, [subscription.tier_id]);
+
     // Parse benefits
     let benefits = [];
     try {
@@ -555,6 +563,16 @@ router.get('/user-subscriptions/:userId/:userType', async (req, res) => {
       benefits = [];
     }
 
+    // Format tier options as an object for easy access
+    const options = {};
+    tierOptions.forEach(option => {
+      options[option.option_id] = {
+        value: option.value,
+        name: option.option_name,
+        type: option.option_type
+      };
+    });
+
     res.json({
       success: true,
       currentSubscription: {
@@ -563,6 +581,7 @@ router.get('/user-subscriptions/:userId/:userType', async (req, res) => {
         tierName: subscription.tier_name,
         tierPrice: subscription.tier_price,
         benefits: benefits,
+        options: options, // Add tier options here
         status: subscription.status,
         startDate: subscription.start_date,
         nextBillingDate: subscription.next_billing_date,
@@ -610,6 +629,99 @@ router.put('/billing-history/:orderId/payment-status', async (req, res) => {
   } catch (error) {
     console.error('Error updating payment status:', error);
     res.status(500).json({ error: 'Failed to update payment status' });
+  }
+});
+
+// Get monthly crop count for a farmer
+router.get('/monthly-crop-count/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { month, year } = req.query;
+
+    // Validate input
+    if (!month || !year) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Month and year parameters are required' 
+      });
+    }
+
+    const currentMonth = parseInt(month);
+    const currentYear = parseInt(year);
+    const farmerIdNumber = parseInt(userId);
+
+    // Validate month and year
+    if (currentMonth < 1 || currentMonth > 12 || currentYear < 2020 || currentYear > 2030) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid month or year' 
+      });
+    }
+
+    // Validate farmer ID
+    if (isNaN(farmerIdNumber) || farmerIdNumber <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid farmer ID' 
+      });
+    }
+
+    // Get the start and end dates of the month
+    let startDateStr, endDateStr;
+    try {
+      const startDate = new Date(currentYear, currentMonth - 1, 1);
+      const endDate = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
+
+      // Convert to MySQL datetime format
+      startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
+      endDateStr = endDate.toISOString().slice(0, 19).replace('T', ' ');
+
+      console.log(`Checking crop count for farmer ${farmerIdNumber} from ${startDateStr} to ${endDateStr}`);
+    } catch (dateError) {
+      console.error('Error formatting dates:', dateError);
+      throw new Error('Date formatting failed');
+    }
+
+    // Count crops posted by the farmer in the current month
+    const [result] = await db.execute(`
+      SELECT COUNT(*) as monthlyCount
+      FROM crop_posts 
+      WHERE farmer_id = ? 
+        AND created_at >= ? 
+        AND created_at <= ?
+        AND status != 'deleted'
+    `, [farmerIdNumber, startDateStr, endDateStr]);
+
+    const monthlyCount = result[0]?.monthlyCount || 0;
+
+    console.log(`Monthly crop count for farmer ${farmerIdNumber}: ${monthlyCount}`);
+
+    res.json({
+      success: true,
+      data: {
+        userId: farmerIdNumber,
+        month: currentMonth,
+        year: currentYear,
+        monthlyCount: monthlyCount,
+        periodStart: startDateStr,
+        periodEnd: endDateStr
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching monthly crop count:', error);
+    console.error('Stack trace:', error.stack);
+    console.error('SQL Query details:', {
+      userId,
+      month,
+      year,
+      startDateStr: error.startDateStr || 'N/A',
+      endDateStr: error.endDateStr || 'N/A'
+    });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch monthly crop count',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

@@ -375,4 +375,48 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/v1/orders/monthly-count/:userId (get monthly order count for a specific user)
+router.get('/monthly-count/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    // Get current month's start and end dates
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    
+    console.log(`Fetching monthly order count for user ${userId} from ${startOfMonth.toISOString()} to ${endOfMonth.toISOString()}`);
+    
+    // Count orders for this user in the current month
+    const [result] = await db.execute(
+      `SELECT COUNT(*) as count 
+       FROM orders 
+       WHERE userId = ? 
+       AND createdAt >= ? 
+       AND createdAt <= ?`,
+      [userId, startOfMonth, endOfMonth]
+    );
+    
+    const orderCount = result[0]?.count || 0;
+    
+    console.log(`User ${userId} has ${orderCount} orders this month`);
+    
+    res.json({ 
+      success: true, 
+      count: parseInt(orderCount),
+      period: {
+        start: startOfMonth.toISOString(),
+        end: endOfMonth.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching monthly order count:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch monthly order count',
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router;
