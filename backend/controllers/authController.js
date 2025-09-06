@@ -1,29 +1,39 @@
 const { hashPassword, comparePassword, sanitizeUser, formatResponse } = require('../utils/helpers');
+
+// Image upload limits and validation
+const DEFAULT_PROFILE_IMAGE_MAX_BYTES = process.env.PROFILE_IMAGE_MAX_BYTES ? parseInt(process.env.PROFILE_IMAGE_MAX_BYTES, 10) : (5 * 1024 * 1024); // 5MB default
+const ALLOWED_IMAGE_MIMETYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
+
+function validateImageFile(file, maxBytes = DEFAULT_PROFILE_IMAGE_MAX_BYTES) {
+  if (!file) return { ok: true };
+  if (!file.mimetype || !ALLOWED_IMAGE_MIMETYPES.includes(file.mimetype)) {
+    return { ok: false, message: 'Profile image must be a JPEG, PNG, WEBP, GIF or SVG file.' };
+  }
+  if (file.size > maxBytes) {
+    return { ok: false, message: `Profile image must be smaller than ${Math.round(maxBytes / (1024 * 1024))}MB.` };
+  }
+  return { ok: true };
+}
 // Update user profile and farmer details
 const updateProfileWithFarmerDetails = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const pool = require('../config/database').pool;
+    const User = require('../models/User');
+    const FarmerDetails = require('../models/FarmerDetails');
+    const ShopOwner = require('../models/ShopOwner');
 
     // Parse form data (for file upload support)
     let data = req.body;
     console.log('Received form data keys:', Object.keys(data));
+    console.log('Coordinate values - latitude:', data.latitude, 'longitude:', data.longitude);
     
     // Handle profile image upload (memory storage)
     let profileImageBuffer = null;
     let profileImageMime = null;
     if (req.file) {
-      // Validate file type
-      if (!req.file.mimetype.startsWith('image/')) {
-        return res.status(400).json({ success: false, message: 'Profile image must be an image file.' });
-      }
-      
-      // Check file size (limit to 50MB for very high quality images)
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      if (req.file.size > maxSize) {
-        return res.status(400).json({ success: false, message: 'Profile image must be smaller than 50MB.' });
-      }
-      
+      const check = validateImageFile(req.file);
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
       profileImageBuffer = req.file.buffer;
       profileImageMime = req.file.mimetype;
       console.log(`Profile image received: ${req.file.buffer.length} bytes, type: ${req.file.mimetype}`);
@@ -33,11 +43,16 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
     const userFields = {
       full_name: data.full_name || data.name || data.fullName,
       email: data.email,
-      phone_number: data.phoneNumber,
+      phone_number: data.phone_number || data.phoneNumber,
       district: data.district,
       nic: data.nic,
       address: data.address,
     };
+    
+    // Add coordinates if provided
+    if (data.latitude !== undefined) userFields.latitude = data.latitude;
+    if (data.longitude !== undefined) userFields.longitude = data.longitude;
+    
     if (profileImageBuffer) {
       userFields.profile_image = profileImageBuffer;
       userFields.profile_image_mime = profileImageMime;
@@ -117,6 +132,29 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
       }
     }
 
+    // Handle shop_details only if user is a shop owner and fields provided
+    const shopFields = {};
+    if (data.shop_name !== undefined || data.shopName !== undefined) shopFields.shop_name = data.shop_name || data.shopName;
+    if (data.shop_address !== undefined || data.shopAddress !== undefined) shopFields.shop_address = data.shop_address || data.shopAddress;
+    if (data.shop_description !== undefined || data.shopDescription !== undefined) shopFields.shop_description = data.shop_description || data.shopDescription;
+    if (data.business_license !== undefined || data.businessLicense !== undefined) shopFields.business_license = data.business_license || data.businessLicense;
+    if (data.business_registration_number !== undefined || data.businessRegistrationNumber !== undefined) shopFields.business_registration_number = data.business_registration_number || data.businessRegistrationNumber;
+    if (data.opening_days !== undefined || data.openingDays !== undefined) shopFields.opening_days = JSON.stringify(data.opening_days || data.openingDays);
+    if (data.shop_category !== undefined || data.shopCategory !== undefined) shopFields.shop_category = data.shop_category || data.shopCategory;
+    if (data.operating_hours !== undefined || data.operatingHours !== undefined) shopFields.operating_hours = data.operating_hours || data.operatingHours;
+    if (data.working_hours !== undefined || data.workingHours !== undefined) shopFields.operating_hours = data.working_hours || data.workingHours;
+    if (data.shop_phone_number !== undefined || data.shopPhoneNumber !== undefined) shopFields.shop_phone_number = data.shop_phone_number || data.shopPhoneNumber;
+    if (data.shop_email !== undefined || data.shopEmail !== undefined) shopFields.shop_email = data.shop_email || data.shopEmail;
+    if (data.delivery_areas !== undefined || data.deliveryAreas !== undefined) shopFields.delivery_areas = data.delivery_areas || data.deliveryAreas;
+    
+    if (Object.keys(shopFields).length > 0) {
+      // Check if user is shop owner before updating
+      const currentUser = await User.findById(userId);
+      if (currentUser && (currentUser.user_type === 'shop_owner' || currentUser.user_type === '3')) {
+        await ShopOwner.updateByUserId(userId, shopFields);
+      }
+    }
+
     // Fetch and return the updated profile with associated details
     const user = await User.findById(userId);
     if (!user) {
@@ -124,8 +162,12 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
     }
     
     let farmerDetails = null;
+    let shopOwnerDetails = null;
+    
     if (user.user_type === '1' || user.user_type === '1.1') { // 1 or 1.1 = farmer
       farmerDetails = await FarmerDetails.findByUserId(user.id);
+    } else if (user.user_type === 'shop_owner' || user.user_type === '3') { // shop owner
+      shopOwnerDetails = await ShopOwner.findByUserId(user.id);
     }
     
     return res.json({
@@ -133,7 +175,8 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
       message: 'Profile updated successfully.',
       user: {
         ...sanitizeUser(user),
-        farmer_details: farmerDetails
+        farmer_details: farmerDetails,
+        shop_owner_details: shopOwnerDetails
       }
     });
   } catch (err) {
@@ -184,6 +227,13 @@ const registerShopOwner = async (req, res, next) => {
     const profileImageFile = req.files && req.files.profile_image ? req.files.profile_image[0] : null;
     const shopImageFile = req.files && req.files.shop_image ? req.files.shop_image[0] : null;
     const shopLicenseFile = req.files && req.files.shop_license ? req.files.shop_license[0] : null;
+
+    // Validate profile image for shop owner registration as well
+    if (profileImageFile) {
+      const check = validateImageFile(profileImageFile);
+      if (!check.ok) return res.status(400).json({ success: false, message: check.message });
+    }
+    // Optionally validate shop images similarly if needed (not enforced here)
 
     // Create user
     const userData = {
@@ -635,12 +685,19 @@ const getProfile = async (req, res, next) => {
 // Get current user profile with associated details
 const getProfileWithFarmerDetails = async (req, res, next) => {
   try {
+    const User = require('../models/User');
+    const FarmerDetails = require('../models/FarmerDetails');
+    const BuyerDetails = require('../models/Buyer');
+    const ShopOwner = require('../models/ShopOwner');
+    
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     let farmerDetails = null;
     let buyerDetails = null;
+    let shopOwnerDetails = null;
+    
     // Fetch farmer details if applicable
     if (user.user_type === '1' || user.user_type === '1.1') {
       farmerDetails = await FarmerDetails.findByUserId(user.id);
@@ -649,12 +706,18 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
     if (user.user_type === '2') {
       buyerDetails = await BuyerDetails.findByUserId(user.id);
     }
+    // Fetch shop owner details if applicable
+    if (user.user_type === '3') {
+      shopOwnerDetails = await ShopOwner.findByUserId(user.id);
+    }
+    
     return res.json({
       success: true,
       user: {
         ...sanitizeUser(user),
         farmer_details: farmerDetails,
-        buyer_details: buyerDetails
+        buyer_details: buyerDetails,
+        shop_owner_details: shopOwnerDetails
       }
     });
   } catch (error) {
