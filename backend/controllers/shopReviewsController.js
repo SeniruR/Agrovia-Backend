@@ -19,23 +19,18 @@ class ShopReviewsController {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
-            // First verify that the shop exists and is active
-            const [shops] = await pool.execute('SELECT id, is_active FROM shop_details WHERE id = ?', [shop_id]);
+            // First verify that the product exists 
+            const [products] = await pool.execute('SELECT id FROM products WHERE id = ?', [shop_id]);
             
-            if (shops.length === 0) {
+            if (products.length === 0) {
                 return res.status(404).json({ 
                     success: false,
-                    error: `Shop with ID ${shop_id} not found` 
+                    error: `Product with ID ${shop_id} not found` 
                 });
             }
             
-            // Check if shop is active
-            if (shops[0].is_active === 0) {
-                return res.status(403).json({ 
-                    success: false,
-                    error: `Shop with ID ${shop_id} is not active` 
-                });
-            }
+            // For backward compatibility, we keep shop_id parameter name but it's actually product_id
+            // No need to check if active since we're checking for product existence
 
             const newReview = await ShopReviews.create({
                 shop_id,
@@ -53,10 +48,11 @@ class ShopReviewsController {
         }
     }
 
-    // ✅ Get all reviews for a shop
+    // ✅ Get all reviews for a shop/product
     static async getReviewsByShop(req, res) {
         try {
-            const { shop_id } = req.params;
+            // Handle both query parameter (shop_id in query) and URL parameter (shop_id in params)
+            const shop_id = req.query.shop_id || req.params.shop_id;
 
             if (!shop_id) {
                 return res.status(400).json({ error: 'shop_id is required' });
