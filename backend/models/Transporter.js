@@ -48,6 +48,34 @@ class Transporter {
     }
   }
 
+  // Update transporter details by user_id
+  static async updateByUserId(user_id, transporterData) {
+    const fields = [];
+    const values = [];
+    
+    // Build dynamic query based on provided fields
+    Object.keys(transporterData).forEach(key => {
+      if (transporterData[key] !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(transporterData[key]);
+      }
+    });
+
+    if (fields.length === 0) {
+      return { affectedRows: 0 };
+    }
+
+    values.push(user_id);
+    const query = `UPDATE transporter_details SET ${fields.join(', ')} WHERE user_id = ?`;
+    
+    try {
+      const [result] = await pool.execute(query, values);
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Get all transporters
   static async getAll() {
     try {
