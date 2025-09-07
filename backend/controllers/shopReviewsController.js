@@ -55,7 +55,10 @@ class ShopReviewsController {
             const shop_id = req.query.shop_id || req.params.shop_id;
 
             if (!shop_id) {
-                return res.status(400).json({ error: 'shop_id is required' });
+                return res.status(400).json({ 
+                    success: false,
+                    error: 'shop_id is required' 
+                });
             }
 
             const reviews = await ShopReviews.findByShopId(shop_id);
@@ -63,7 +66,10 @@ class ShopReviewsController {
             res.status(200).json(reviews);
         } catch (error) {
             console.error('Error fetching shop reviews:', error);
-            res.status(500).json({ error: 'Internal Server Error' });
+            res.status(500).json({ 
+                success: false,
+                error: 'Internal Server Error' 
+            });
         }
     }
 
