@@ -105,6 +105,9 @@ app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
+// Shop reviews routes
+const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
+app.use('/api/v1/shop-reviews', shopReviewsRoutes);
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({

@@ -38,6 +38,7 @@
     "mysql2": "^3.6.5",
     "nodemailer": "^7.0.5",
     "path": "^0.12.7",
+    "sequelize": "^6.37.7",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
