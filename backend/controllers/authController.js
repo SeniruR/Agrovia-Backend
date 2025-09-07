@@ -147,11 +147,79 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
     if (data.shop_email !== undefined || data.shopEmail !== undefined) shopFields.shop_email = data.shop_email || data.shopEmail;
     if (data.delivery_areas !== undefined || data.deliveryAreas !== undefined) shopFields.delivery_areas = data.delivery_areas || data.deliveryAreas;
     
+    // Add shop coordinates if provided
+    if (data.shop_latitude !== undefined || data.shopLatitude !== undefined) shopFields.latitude = data.shop_latitude || data.shopLatitude;
+    if (data.shop_longitude !== undefined || data.shopLongitude !== undefined) shopFields.longitude = data.shop_longitude || data.shopLongitude;
+    
     if (Object.keys(shopFields).length > 0) {
       // Check if user is shop owner before updating
       const currentUser = await User.findById(userId);
       if (currentUser && (currentUser.user_type === 'shop_owner' || currentUser.user_type === '3')) {
         await ShopOwner.updateByUserId(userId, shopFields);
+      }
+    }
+
+    // Handle transporter_details only if user is a transporter and fields provided
+    const transporterFields = {};
+    if (data.vehicle_type !== undefined || data.vehicleType !== undefined) transporterFields.vehicle_type = data.vehicle_type || data.vehicleType;
+    if (data.vehicle_number !== undefined || data.vehicleNumber !== undefined) transporterFields.vehicle_number = data.vehicle_number || data.vehicleNumber;
+    if (data.vehicle_capacity !== undefined || data.vehicleCapacity !== undefined) transporterFields.vehicle_capacity = data.vehicle_capacity || data.vehicleCapacity;
+    if (data.capacity_unit !== undefined || data.capacityUnit !== undefined) transporterFields.capacity_unit = data.capacity_unit || data.capacityUnit;
+    if (data.license_number !== undefined || data.licenseNumber !== undefined) transporterFields.license_number = data.license_number || data.licenseNumber;
+    if (data.license_expiry !== undefined || data.licenseExpiry !== undefined) transporterFields.license_expiry = data.license_expiry || data.licenseExpiry;
+    if (data.additional_info !== undefined || data.additionalInfo !== undefined) transporterFields.additional_info = data.additional_info || data.additionalInfo;
+    
+    if (Object.keys(transporterFields).length > 0) {
+      // Check if user is transporter before updating
+      const currentUser = await User.findById(userId);
+      if (currentUser && (currentUser.user_type === 'transporter' || currentUser.user_type === '4')) {
+        const Transporter = require('../models/Transporter');
+        await Transporter.updateByUserId(userId, transporterFields);
+      }
+    }
+
+    // Handle moderator skill demonstrations only if user is a moderator
+    const currentUser = await User.findById(userId);
+    if (currentUser && (currentUser.user_type === 'moderator' || currentUser.user_type === '5')) {
+      const { ModeratorSkillDemonstration, ModeratorSkillType } = require('../models/Moderator');
+      
+      const demonstrations = [];
+      
+      // Handle skill URLs (data_type_id: 1)
+      if (data.skill_urls && Array.isArray(data.skill_urls)) {
+        for (const url of data.skill_urls) {
+          if (url && url.trim()) {
+            demonstrations.push({
+              data_type_id: 1,
+              data: url.trim()
+            });
+          }
+        }
+      }
+      
+      // Handle worker IDs (data_type_id: 2)
+      if (data.worker_ids && Array.isArray(data.worker_ids)) {
+        for (const id of data.worker_ids) {
+          if (id && id.trim()) {
+            demonstrations.push({
+              data_type_id: 2,
+              data: id.trim()
+            });
+          }
+        }
+      }
+      
+      // Handle skill description (data_type_id: 3)
+      if (data.skill_description && data.skill_description.trim()) {
+        demonstrations.push({
+          data_type_id: 3,
+          data: data.skill_description.trim()
+        });
+      }
+      
+      // Update skill demonstrations
+      if (demonstrations.length > 0) {
+        await ModeratorSkillDemonstration.updateByUserId(userId, demonstrations);
       }
     }
 
@@ -163,11 +231,15 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
     
     let farmerDetails = null;
     let shopOwnerDetails = null;
+    let transporterDetails = null;
     
     if (user.user_type === '1' || user.user_type === '1.1') { // 1 or 1.1 = farmer
       farmerDetails = await FarmerDetails.findByUserId(user.id);
     } else if (user.user_type === 'shop_owner' || user.user_type === '3') { // shop owner
       shopOwnerDetails = await ShopOwner.findByUserId(user.id);
+    } else if (user.user_type === 'transporter' || user.user_type === '4') { // transporter
+      const Transporter = require('../models/Transporter');
+      transporterDetails = await Transporter.findByUserId(user.id);
     }
     
     return res.json({
@@ -176,7 +248,8 @@ const updateProfileWithFarmerDetails = async (req, res, next) => {
       user: {
         ...sanitizeUser(user),
         farmer_details: farmerDetails,
-        shop_owner_details: shopOwnerDetails
+        shop_owner_details: shopOwnerDetails,
+        transporter_details: transporterDetails
       }
     });
   } catch (err) {
@@ -689,6 +762,8 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
     const FarmerDetails = require('../models/FarmerDetails');
     const BuyerDetails = require('../models/Buyer');
     const ShopOwner = require('../models/ShopOwner');
+    const Transporter = require('../models/Transporter');
+    const { ModeratorSkillDemonstration } = require('../models/Moderator');
     
     const user = await User.findById(req.user.id);
     if (!user) {
@@ -697,6 +772,8 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
     let farmerDetails = null;
     let buyerDetails = null;
     let shopOwnerDetails = null;
+    let transporterDetails = null;
+    let skillDemonstrations = null;
     
     // Fetch farmer details if applicable
     if (user.user_type === '1' || user.user_type === '1.1') {
@@ -710,6 +787,14 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
     if (user.user_type === '3') {
       shopOwnerDetails = await ShopOwner.findByUserId(user.id);
     }
+    // Fetch transporter details if applicable
+    if (user.user_type === '4') {
+      transporterDetails = await Transporter.findByUserId(user.id);
+    }
+    // Fetch moderator skill demonstrations if applicable
+    if (user.user_type === '5') {
+      skillDemonstrations = await ModeratorSkillDemonstration.getByUserId(user.id);
+    }
     
     return res.json({
       success: true,
@@ -717,8 +802,10 @@ const getProfileWithFarmerDetails = async (req, res, next) => {
         ...sanitizeUser(user),
         farmer_details: farmerDetails,
         buyer_details: buyerDetails,
-        shop_owner_details: shopOwnerDetails
-      }
+        shop_owner_details: shopOwnerDetails,
+        transporter_details: transporterDetails
+      },
+      skillDemonstrations: skillDemonstrations
     });
   } catch (error) {
     next(error);
