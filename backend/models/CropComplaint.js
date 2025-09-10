@@ -1,4 +1,10 @@
+
 const { pool } = require('../config/database');
+
+// Optional dev logger (opt-in via DEBUG_ATTACHMENT_LOGS)
+const devLog = (...args) => {
+  if (process.env.DEBUG_ATTACHMENT_LOGS === 'true') console.log(...args);
+};
 
 class CropComplaint {
   // Create a new crop complaint
@@ -15,10 +21,10 @@ class CropComplaint {
       attachments = null // images as BLOB
     } = complaint;
 
-    // Debug: Log the complaint data
-    console.log('Model received complaint:', complaint);
-    console.log('Model to_farmer value:', to_farmer);
-    console.log('Model to_farmer type:', typeof to_farmer);
+  // Debug: Log the complaint data (opt-in)
+  devLog('Model received complaint:', complaint);
+  devLog('Model to_farmer value:', to_farmer);
+  devLog('Model to_farmer type:', typeof to_farmer);
 
     // Ensure attachments is always a JSON stringified array
     let attachmentsStr = '[]';
@@ -44,9 +50,9 @@ class CropComplaint {
       new Date() // submitted_at as current timestamp
     ];
     
-    // Debug: Log the values being inserted
-    console.log('Inserting values:', values);
-    console.log('to_farmer value being inserted:', values[5]);
+  // Debug: Log the values being inserted (opt-in)
+  devLog('Inserting values:', values);
+  devLog('to_farmer value being inserted:', values[5]);
     
     try {
       const [result] = await pool.execute(query, values);

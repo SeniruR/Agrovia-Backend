@@ -20,6 +20,11 @@ router.get('/:id', transportComplaintController.getComplaintById);
 // Public: Update a complaint
 router.put('/:id', upload.array('attachments', 5), transportComplaintController.updateComplaint);
 
+const { authenticate, authorize } = require('../middleware/auth');
+
+// Admin: Deactivate transport company related to a complaint
+router.put('/:id/deactivate-transport-company', authenticate, authorize('admin'), transportComplaintController.deactivateTransportCompany);
+
 // Public: Delete a complaint
 router.delete('/:id', transportComplaintController.deleteComplaint);
 

@@ -1,5 +1,12 @@
 const { pool } = require('../config/database');
 
+// Attachment debug logger: opt-in via DEBUG_ATTACHMENT_LOGS='true'
+const devLog = (...args) => {
+  if (process.env.DEBUG_ATTACHMENT_LOGS === 'true') {
+    console.log(...args);
+  }
+};
+
 class ShopComplaint {
   // Create a new shop complaint
   static async create(complaint) {
@@ -105,10 +112,10 @@ class ShopComplaint {
       // Debug the raw attachments data first
       if (row.attachments) {
         if (Buffer.isBuffer(rows[0].attachments)) {
-          console.log('Attachments is a Buffer, length:', rows[0].attachments.length);
+          devLog('Attachments is a Buffer, length:', rows[0].attachments.length);
         } else if (typeof rows[0].attachments === 'string') {
-          console.log('Attachments is a String, length:', rows[0].attachments.length);
-          console.log('First few characters:', rows[0].attachments.substring(0, 30));
+          devLog('Attachments is a String, length:', rows[0].attachments.length);
+          devLog('First few characters:', rows[0].attachments.substring(0, 30));
         }
       }
       
@@ -116,30 +123,30 @@ class ShopComplaint {
       if (row.attachments) {
         try {
           const parsed = JSON.parse(row.attachments);
-          console.log('Successfully parsed attachments as JSON');
+          devLog('Successfully parsed attachments as JSON');
           
           // If we have one attachment, put it in the image field
           if (Array.isArray(parsed) && parsed.length === 1) {
             resultObj.image = parsed[0];
-            console.log('Using single item from parsed JSON array');
+            devLog('Using single item from parsed JSON array');
           } else if (Array.isArray(parsed) && parsed.length > 1) {
             resultObj.images = parsed;
-            console.log('Using multiple items from parsed JSON array');
+            devLog('Using multiple items from parsed JSON array');
           }
         } catch (e) {
           // If JSON parsing fails, attachments might be a raw data string
-          console.log('JSON parsing failed:', e.message);
+          devLog('JSON parsing failed:', e.message);
           
           // For shop complaints, the attachment might be stored directly as base64
           if (typeof rows[0].attachments === 'string') {
             // Clean the string (remove any wrapping quotes, etc.)
             let cleanedData = rows[0].attachments.replace(/^["']+|["']+$/g, '');
             resultObj.image = cleanedData;
-            console.log('Using direct string data as image, length:', cleanedData.length);
+            devLog('Using direct string data as image, length:', cleanedData.length);
           } else if (Buffer.isBuffer(rows[0].attachments)) {
             // It's a Buffer, convert to base64
             resultObj.image = rows[0].attachments.toString('base64');
-            console.log('Converted Buffer to base64 string, length:', resultObj.image.length);
+            devLog('Converted Buffer to base64 string, length:', resultObj.image.length);
           }
         }
       }
