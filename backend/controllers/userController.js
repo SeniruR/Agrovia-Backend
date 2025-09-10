@@ -280,6 +280,24 @@ class UserController {
     }
   }
 
+  // Get user by ID (basic public info)
+  static async getUserById(req, res) {
+    try {
+      const userId = req.params.id;
+      console.log(`📋 Get user by ID request received: ${userId}`);
+      const query = `SELECT id, full_name, email, phone_number, district FROM users WHERE id = ?`;
+      const [rows] = await pool.execute(query, [userId]);
+      if (!rows || rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+  // Return the first (and only) matching user record in a consistent shape
+  res.json({ success: true, data: rows[0] });
+    } catch (error) {
+      console.error('❌ Get user by ID error:', error);
+      res.status(500).json({ success: false, message: 'Failed to retrieve user', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
+    }
+  }
+
   // Get user's crop posting history for suggestions
   static async getUserCropHistory(req, res) {
     try {

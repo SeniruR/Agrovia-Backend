@@ -127,9 +127,14 @@ app.use(errorHandler);
 // Start server
 const startServer = async () => {
   try {
-    // Test database connection
-    await testConnection();
-    
+    // Optionally skip database connection during local frontend-only development
+    if (process.env.SKIP_DB === 'true') {
+      console.log('⚠️ SKIP_DB is true - skipping database connection check (development only)');
+    } else {
+      // Test database connection
+      await testConnection();
+    }
+
     // Start the server
     app.listen(PORT, () => {
       console.log(`
