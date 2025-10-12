@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const { pool } = require('../config/database');
+const { getFarmerCoordinates, getBuyerCartCoordinates } = require("../models/cartModel");
 
 // Get cart items for the authenticated user
 router.get('/', authenticate, async (req, res) => {
@@ -111,5 +112,31 @@ router.delete('/', authenticate, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to clear cart', error: error.message });
   }
 });
+
+
+router.get("/:productId/coordinates", async (req, res) => {
+  try {
+    const coords = await getFarmerCoordinates(req.params.productId);
+    if (!coords) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+    res.json(coords);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get("/buyer/:buyerId/cart-coordinates", async (req, res) => {
+  try {
+    const coordsList = await getBuyerCartCoordinates(req.params.buyerId);
+    res.json(coordsList);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+module.exports = router;
 
 module.exports = router;

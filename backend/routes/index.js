@@ -10,6 +10,7 @@ const cropPostRoutes = require('./cropPosts');
 const userRoutes = require('./users');
 const shopComplaintRoutes = require('./shopComplaint');
 const transporterRoutes = require('./transporterRoutes');
+const moderatorRoutes = require('./moderatorRoutes');
 const transportComplaintRoutes = require('./transportComplaint');
 const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
@@ -30,6 +31,7 @@ router.get('/health', (req, res) => {
 
 // (undo) removed disableAccounts route registration
 
+
 // API routes
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
@@ -42,9 +44,16 @@ router.use('/users', userRoutes);
 router.use('/shops', require('./shops'));
 router.use('/shop-complaints', shopComplaintRoutes);
 router.use('/transporters', transporterRoutes);
+router.use('/moderators', moderatorRoutes);
 router.use('/transport-complaints', transportComplaintRoutes);
 router.use('/crop-complaints', cropComplaintRoutes);
 router.use('/cart', cartRoutes);
+
+// Pest Alerts API
+router.use('/pest-alerts', require('./pestAlerts'));
+
+// Bulk seller chat
+router.use('/bulk-seller-chat', require('./bulkSellerChat'));
 
 // Mount proxy routes
 const proxyRoutes = require('./proxy');

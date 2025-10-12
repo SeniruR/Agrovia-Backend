@@ -8,20 +8,24 @@ class Buyer {
       company_name,
       company_type,
       company_address,
-      payment_offer
+      payment_offer,
+      company_latitude,
+      company_longitude
     } = buyerData;
 
     const query = `
       INSERT INTO buyer_details (
-        user_id, company_name, company_type, company_address, payment_offer
-      ) VALUES (?, ?, ?, ?, ?)
+        user_id, company_name, company_type, company_address, payment_offer, latitude, longitude
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const values = [
       user_id,
       company_name ?? null,
       company_type ?? null,
       company_address ?? null,
-      payment_offer ?? null
+      payment_offer ?? null,
+      company_latitude ?? null,
+      company_longitude ?? null
     ];
     try {
       const [result] = await pool.execute(query, values);
