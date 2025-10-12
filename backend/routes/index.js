@@ -52,6 +52,9 @@ router.use('/cart', cartRoutes);
 // Pest Alerts API
 router.use('/pest-alerts', require('./pestAlerts'));
 
+// Bulk seller chat
+router.use('/bulk-seller-chat', require('./bulkSellerChat'));
+
 // Mount proxy routes
 const proxyRoutes = require('./proxy');
 router.use('/proxy', proxyRoutes);

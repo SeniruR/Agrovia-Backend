@@ -21,7 +21,12 @@ const orderRoutes = require('./routes/orders');
 
 // Create Express app
 const app = express();
+const http = require('http');
+const server = http.createServer(app);
+const { Server } = require('socket.io');
 const PORT = process.env.PORT || 5000;
+
+// Socket.IO setup will be initialized after DB connection
 
 // Security middleware
 app.use(helmet());
@@ -87,7 +92,7 @@ const startServer = async () => {
     await testConnection();
     
     // Start the server
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`
 🚀 Agrovia Backend Server Started
 📍 Environment: ${process.env.NODE_ENV || 'development'}
@@ -95,6 +100,70 @@ const startServer = async () => {
 🔗 API Base: http://localhost:${PORT}/api/v1
 📊 Health Check: http://localhost:${PORT}/api/v1/health
       `);
+    });
+
+    // Setup Socket.IO
+    const io = new Server(server, {
+      cors: {
+        origin: ['http://localhost:5173', 'http://localhost:5174'],
+        methods: ['GET', 'POST']
+      }
+    });
+
+    // Lazy-load model and auth verify function
+    const BulkSellerChat = require('./models/BulkSellerChat');
+    const { verifyToken } = require('./middleware/auth');
+
+    io.use((socket, next) => {
+      // Accept token via socket.handshake.auth.token or query
+      const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+      if (!token) return next(new Error('Authentication error: token required'));
+      try {
+        const decoded = verifyToken(token);
+        socket.user = decoded; // keep decoded payload (must contain userId)
+        return next();
+      } catch (err) {
+        return next(new Error('Authentication error'));
+      }
+    });
+
+    io.on('connection', (socket) => {
+      const userId = socket.user.userId;
+      console.log('Socket connected userId=', userId);
+
+      // Join a conversation room
+      socket.on('join_conversation', ({ seller_id, buyer_id }) => {
+        if (!seller_id || !buyer_id) return;
+        const room = `conversation_${Math.min(seller_id,buyer_id)}_${Math.max(seller_id,buyer_id)}`;
+        socket.join(room);
+        socket.emit('joined', { room });
+      });
+
+      // Handle sending messages
+      socket.on('send_message', async (payload, ack) => {
+        try {
+          const { seller_id, buyer_id, message, sent_by } = payload;
+          // Basic validation
+          if (!seller_id || !buyer_id || !message || !sent_by) {
+            if (ack) ack({ success: false, error: 'Invalid payload' });
+            return;
+          }
+
+          const id = await BulkSellerChat.create({ seller_id, buyer_id, message, sent_by });
+          const rows = await BulkSellerChat.getByConversation({ seller_id, buyer_id, limit: 1, offset: 0 });
+          const msg = rows[rows.length - 1] || null;
+          const room = `conversation_${Math.min(seller_id,buyer_id)}_${Math.max(seller_id,buyer_id)}`;
+          io.to(room).emit('new_message', msg);
+          if (ack) ack({ success: true, data: msg });
+        } catch (err) {
+          console.error('send_message error', err);
+          if (ack) ack({ success: false, error: err.message });
+        }
+      });
+
+      socket.on('disconnect', () => {
+        // handle disconnect if needed
+      });
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
