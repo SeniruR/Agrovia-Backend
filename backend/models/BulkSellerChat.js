@@ -15,6 +15,12 @@ class BulkSellerChat {
     return rows;
   }
 
+  static async getById(id) {
+    const query = `SELECT * FROM bulk_seller_chat WHERE id = ?`;
+    const [rows] = await pool.query(query, [id]);
+    return rows[0] || null;
+  }
+
   static async getBySeller(seller_id, limit = 100, offset = 0) {
     const query = `SELECT * FROM bulk_seller_chat WHERE seller_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`;
     const [rows] = await pool.query(query, [seller_id, Number(limit), Number(offset)]);
