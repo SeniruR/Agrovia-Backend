@@ -95,11 +95,13 @@ app.use('/uploads/crop-images', cors(), express.static(path.join(__dirname, 'upl
   }
 }));
 const shopProductRoutes = require('./routes/shopProductRoutes');
+const shopStatsRoutes = require('./routes/shopStats');
 // Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
 const transportAllocationRoutes = require('./routes/TransportRoutes');
 app.use('/api/transport-allocations', transportAllocationRoutes);
 
 app.use('/api/v1/shop-products', shopProductRoutes);
+app.use('/api/v1/shop', shopStatsRoutes);
 // API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);
@@ -125,9 +127,14 @@ app.use(errorHandler);
 // Start server
 const startServer = async () => {
   try {
-    // Test database connection
-    await testConnection();
-    
+    // Optionally skip database connection during local frontend-only development
+    if (process.env.SKIP_DB === 'true') {
+      console.log('⚠️ SKIP_DB is true - skipping database connection check (development only)');
+    } else {
+      // Test database connection
+      await testConnection();
+    }
+
     // Start the server
     app.listen(PORT, () => {
       console.log(`

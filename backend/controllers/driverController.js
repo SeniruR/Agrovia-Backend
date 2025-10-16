@@ -1,5 +1,8 @@
 const pool = require('../utils/db');
 
+// Optional dev logger
+const devLog = (...args) => { if (process.env.DEBUG_ATTACHMENT_LOGS === 'true') console.log(...args); };
+
 // GET /api/v1/driver/deliveries
 // Returns deliveries (order items) assigned to the authenticated transporter
 exports.getDeliveriesForTransporter = async (req, res) => {
@@ -104,7 +107,7 @@ exports.updateDeliveryStatus = async (req, res) => {
     const { status } = req.body;
     const transporterUserId = req.user.id;
 
-    console.log(`🚚 STATUS UPDATE REQUEST: transport_id=${id}, raw_status="${status}", user_id=${transporterUserId}`);
+  devLog(`🚚 STATUS UPDATE REQUEST: transport_id=${id}, raw_status="${status}", user_id=${transporterUserId}`);
 
     // Normalize incoming status to the four canonical statuses before persisting
     const canonicalizeIncomingStatus = (s) => {
@@ -147,7 +150,7 @@ exports.updateDeliveryStatus = async (req, res) => {
 
     const orderItemId = verifyRows[0].order_item_id;
 
-    console.log(`✅ Verified: order_transport_id=${id} -> order_item_id=${orderItemId}`);
+  devLog(`✅ Verified: order_transport_id=${id} -> order_item_id=${orderItemId}`);
 
     // Update the order_items status
     const updateSql = `
@@ -156,9 +159,9 @@ exports.updateDeliveryStatus = async (req, res) => {
       WHERE id = ?
     `;
 
-  console.log(`🔄 Updating order_items: SET status='${newStatus}' WHERE id=${orderItemId}`);
+  devLog(`🔄 Updating order_items: SET status='${newStatus}' WHERE id=${orderItemId}`);
   const [updateResult] = await pool.execute(updateSql, [newStatus, orderItemId]);
-    console.log(`📝 Update result:`, updateResult);
+    devLog(`📝 Update result:`, updateResult);
 
     if (updateResult.affectedRows === 0) {
       return res.status(500).json({ 
@@ -167,7 +170,7 @@ exports.updateDeliveryStatus = async (req, res) => {
       });
     }
 
-  console.log(`✅ Successfully updated order_item ${orderItemId} to status: ${newStatus}`);
+  devLog(`✅ Successfully updated order_item ${orderItemId} to status: ${newStatus}`);
 
     return res.json({ 
       success: true, 
@@ -196,7 +199,7 @@ exports.deleteDelivery = async (req, res) => {
     const { id } = req.params; // This is the order_transport_id
     const transporterUserId = req.user.id;
 
-    console.log(`🗑️ DELETE REQUEST: transport_id=${id}, user_id=${transporterUserId}`);
+  devLog(`🗑️ DELETE REQUEST: transport_id=${id}, user_id=${transporterUserId}`);
 
     // First verify that this order_transport belongs to the authenticated transporter
     // and that the delivery is completed
@@ -229,7 +232,7 @@ exports.deleteDelivery = async (req, res) => {
       });
     }
 
-    console.log(`✅ Verified: order_transport_id=${id} -> order_item_id=${orderItemId}, status=${currentStatus}`);
+  devLog(`✅ Verified: order_transport_id=${id} -> order_item_id=${orderItemId}, status=${currentStatus}`);
 
     // Delete the order_transport record (this will remove it from driver's list)
     const deleteSql = `
@@ -237,9 +240,9 @@ exports.deleteDelivery = async (req, res) => {
       WHERE id = ?
     `;
 
-    console.log(`🗑️ Deleting order_transport: id=${id}`);
-    const [deleteResult] = await pool.execute(deleteSql, [id]);
-    console.log(`📝 Delete result:`, deleteResult);
+  devLog(`🗑️ Deleting order_transport: id=${id}`);
+  const [deleteResult] = await pool.execute(deleteSql, [id]);
+  devLog(`📝 Delete result:`, deleteResult);
 
     if (deleteResult.affectedRows === 0) {
       return res.status(500).json({ 
@@ -248,7 +251,7 @@ exports.deleteDelivery = async (req, res) => {
       });
     }
 
-    console.log(`✅ Successfully deleted order_transport ${id}`);
+  devLog(`✅ Successfully deleted order_transport ${id}`);
 
     return res.json({ 
       success: true, 

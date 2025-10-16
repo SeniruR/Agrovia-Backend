@@ -105,6 +105,13 @@ router.put('/profile-full',
   require('../controllers/authController').updateProfileWithFarmerDetails
 );
 
+// General profile update endpoint (alias for profile-full)
+router.put('/update-profile',
+  authenticate,
+  uploadMemory.single('profileImage'),
+  require('../controllers/authController').updateProfileWithFarmerDetails
+);
+
 // Admin only routes
 router.get('/users',
   authenticate,

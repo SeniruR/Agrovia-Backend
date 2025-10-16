@@ -37,4 +37,7 @@ router.get('/profile', UserController.getUserProfile);
 // Get user's crop posting history
 router.get('/crop-history', UserController.getUserCropHistory);
 
+// Get user by ID (public)
+router.get('/:id', UserController.getUserById);
+
 module.exports = router;

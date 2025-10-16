@@ -65,6 +65,22 @@ class ShopOwner {
       throw error;
     }
   }
+
+  // Update shop details by user_id
+  static async updateByUserId(user_id, shopData) {
+    const fields = Object.keys(shopData);
+    const values = Object.values(shopData);
+    const setClause = fields.map(field => `${field} = ?`).join(', ');
+    
+    const query = `UPDATE shop_details SET ${setClause} WHERE user_id = ?`;
+    
+    try {
+      const [result] = await pool.execute(query, [...values, user_id]);
+      return result;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 getAll: async () => {
     const [rows] = await pool.execute('SELECT * FROM shop_products');
