@@ -60,9 +60,6 @@ router.use('/crop-reviews', cropReviewRoutes);
 // Register admin routes
 router.use('/admin', require('./adminRoutes'));
 
-// Pest Alerts API
-router.use('/pest-alerts', require('./pestAlerts'));
-
 // Mount proxy routes
 const proxyRoutes = require('./proxy');
 router.use('/proxy', proxyRoutes);
