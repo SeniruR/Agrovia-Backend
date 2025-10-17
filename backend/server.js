@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-// const cors = require('cors');
+const cors = require('cors');
 
 const helmet = require('helmet');
 const path = require('path');
@@ -25,46 +25,42 @@ const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/adminRoutes');
 
 // Create Express app
-const cors = require('cors');
 const app = express();
-// Enable CORS for frontend dev server
-app.use(cors({
-  origin: 'http://localhost:5174',
-  credentials: true
-}));
+
+// CORS configuration - Allow access from all origins in development
+const corsOptions = {
+  origin: function(origin, callback) {
+    // In development, allow any origin
+    if (process.env.NODE_ENV === 'development' || !origin) {
+      callback(null, true);
+    } else {
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174'
+      ];
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
+};
+
+app.use(cors(corsOptions));
+
+// Explicitly respond to preflight requests
+app.options('*', cors(corsOptions));
+
 const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
-
-
-
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  // allow common custom headers used by the frontend
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
-}));
-
-// Explicitly respond to preflight requests with the same CORS config to ensure
-// Access-Control-Allow-Headers contains our custom header names (some clients
-// require exact matches on preflight responses).
-app.options('*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
-}));
-// CORS configuration
-// app.use(cors({
-//   origin: process.env.NODE_ENV === 'production' 
-//     ? ['https://yourdomain.com'] // Replace with your frontend domain
-//     : ['http://localhost:3000', 'http://localhost:3001'], // React dev server
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
 
 // Rate limiting: in development we skip the general limiter entirely to avoid noisy 429s
 if (process.env.NODE_ENV === 'development') {
@@ -157,9 +153,22 @@ process.on('unhandledRejection', (err, promise) => {
   process.exit(1);
 });
 
-// Handle uncaught exceptions
+// Handle uncaught exceptions with more detailed error handling
 process.on('uncaughtException', (err) => {
+  // Check for common file-type module errors
+  if (err.message && (
+    err.message.includes('file-type') || 
+    err.message.includes('fromBuffer') ||
+    err.message.includes('Unsupported file type')
+  )) {
+    console.error('Uncaught Exception in file detection:', err.message);
+    console.log('This is likely related to image processing. The server will continue running.');
+    // Don't exit for file-type related errors
+    return;
+  }
+  
   console.error('Uncaught Exception:', err.message);
+  console.error(err.stack);
   process.exit(1);
 });
 
