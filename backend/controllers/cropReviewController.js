@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const FileType = require('file-type');
 
 // Setup multer for file uploads
 const storage = multer.diskStorage({
@@ -368,43 +369,64 @@ exports.getReviewById = async (req, res) => {
  * Serve review attachment
  */
 exports.getReviewAttachment = async (req, res) => {
+  let connection;
+  console.log(`[CONTROLLER] Getting attachment for review ID: ${req.params.reviewId}`);
+  
   try {
-    const { reviewId, fileName } = req.params;
+    const { reviewId } = req.params;
     
-    // Construct the file path
-    const filePath = path.join(__dirname, '../uploads/reviews', fileName);
+    // Get database connection
+    connection = await db.getConnection();
     
-    // Check if the file exists
-    if (!fs.existsSync(filePath)) {
+    // Query to get the attachment binary data from the database
+    const query = `
+      SELECT attachments
+      FROM crop_reviews
+      WHERE id = ?
+    `;
+    
+    const [reviews] = await connection.execute(query, [reviewId]);
+    
+    if (reviews.length === 0 || !reviews[0].attachments) {
+      console.log(`No review found or no attachment for review ID: ${reviewId}`);
       return res.status(404).json({
         success: false,
-        message: 'Attachment not found'
+        message: `Review ${reviewId} not found or has no attachment`
       });
     }
     
-    // Determine content type
-    const ext = path.extname(filePath).toLowerCase();
-    let contentType = 'application/octet-stream';
+    const attachmentData = reviews[0].attachments;
     
-    switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        contentType = 'image/jpeg';
-        break;
-      case '.png':
-        contentType = 'image/png';
-        break;
-      case '.gif':
-        contentType = 'image/gif';
-        break;
+    // Check if attachment is stored as JSON string (array of URLs)
+    try {
+      const parsed = JSON.parse(attachmentData);
+      if (Array.isArray(parsed)) {
+        console.log(`Found JSON array of URLs, redirecting to: ${parsed[0]}`);
+        return res.redirect(parsed[0]);
+      }
+    } catch (e) {
+      // Not JSON, should be binary data
+      console.log('Attachment is binary data, proceeding...');
     }
     
-    // Set content type
-    res.setHeader('Content-Type', contentType);
+    // Detect MIME type using file-type
+    try {
+      const fileType = await FileType.fromBuffer(attachmentData);
+      
+      if (fileType) {
+        console.log(`Detected file type: ${fileType.mime}`);
+        res.setHeader('Content-Type', fileType.mime);
+      } else {
+        console.log('Could not detect file type, using default');
+        res.setHeader('Content-Type', 'application/octet-stream');
+      }
+    } catch (err) {
+      console.error('Error detecting file type:', err);
+      res.setHeader('Content-Type', 'application/octet-stream');
+    }
     
-    // Stream the file to the response
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    // Send the binary data as response
+    return res.send(attachmentData);
   } catch (error) {
     console.error('Error serving attachment:', error);
     return res.status(500).json({
@@ -412,6 +434,10 @@ exports.getReviewAttachment = async (req, res) => {
       message: 'Failed to get attachment',
       error: error.message
     });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 };
 

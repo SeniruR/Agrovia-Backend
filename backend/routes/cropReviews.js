@@ -1,9 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
 
 // Import controller
 const cropReviewController = require('../controllers/cropReviewController');
@@ -12,21 +9,7 @@ const cropReviewController = require('../controllers/cropReviewController');
 const { authenticate } = require('../middleware/auth');
 
 // Setup multer for file uploads
-const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    const uploadDir = path.join(__dirname, '../uploads/reviews');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function(req, file, cb) {
-    // Generate unique filename
-    const uniqueFileName = `${uuidv4()}-${file.originalname}`;
-    cb(null, uniqueFileName);
-  }
-});
+const storage = multer.memoryStorage();
 
 // Configure multer with file size limits and accepted file types
 const upload = multer({
@@ -50,12 +33,17 @@ router.get('/', cropReviewController.getReviewsByCropId);
 // GET /api/v1/crop-reviews/:id - Get a specific review
 router.get('/:id', cropReviewController.getReviewById);
 
-// POST /api/v1/crop-reviews - Add a new review (requires authentication)
-// Temporarily disable authentication for testing
-// router.post('/', authenticate, upload.array('attachments', 5), cropReviewController.addReview);
-router.post('/', upload.array('attachments', 5), cropReviewController.addReview);
+// POST /api/v1/crop-reviews - Add a new review
+router.post(
+  '/',
+  upload.array('attachments', 5),
+  cropReviewController.addReview
+);
 
-// GET /api/v1/crop-reviews/:reviewId/attachments/:fileName - Get review attachment
-router.get('/:reviewId/attachments/:fileName', cropReviewController.getReviewAttachment);
+// GET /api/v1/crop-reviews/:reviewId/attachment - Get a review's attachment
+router.get('/:reviewId/attachment', (req, res, next) => {
+  console.log(`[ROUTE DEBUG] Attachment route hit for review ID: ${req.params.reviewId}`);
+  return cropReviewController.getReviewAttachment(req, res, next);
+});
 
 module.exports = router;
