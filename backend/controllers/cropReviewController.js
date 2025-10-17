@@ -185,44 +185,6 @@ exports.addReview = async (req, res) => {
         });
       }
       
-      // Check if crop_reviews table exists, if not create it
-      try {
-        const checkTableQuery = `
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_schema = DATABASE() 
-          AND table_name = 'crop_reviews'
-        `;
-        
-        const [tableExists] = await connection.execute(checkTableQuery);
-        
-        if (tableExists.length === 0) {
-          console.log("crop_reviews table does not exist, creating it now...");
-          
-          // Create the crop_reviews table
-          const createTableQuery = `
-            CREATE TABLE crop_reviews (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              crop_id INT NOT NULL,
-              buyer_id INT NOT NULL,
-              rating INT NOT NULL,
-              comment TEXT NOT NULL,
-              attachments TEXT,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              INDEX (crop_id),
-              INDEX (buyer_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-          `;
-          
-          await connection.execute(createTableQuery);
-          console.log("crop_reviews table created successfully");
-        }
-      } catch (tableError) {
-        console.error("Error checking/creating crop_reviews table:", tableError);
-        await connection.rollback();
-        connection.release();
-        throw tableError; // Re-throw to be caught by the main try-catch
-      }
-      
       // Process uploaded files
       let attachmentUrls = [];
       
