@@ -166,7 +166,7 @@ const createTables = async (connection) => {
         email VARCHAR(255),
         images JSON,
         minimum_quantity_bulk VARCHAR(100) NULL,
-        status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted') DEFAULT 'active',
+  status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted', 'sold') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_farmer_id (farmer_id),
@@ -177,6 +177,18 @@ const createTables = async (connection) => {
         FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure new enum includes 'sold' for existing databases
+    const [statusColumn] = await connection.query(`SHOW COLUMNS FROM crop_posts LIKE 'status'`);
+    if (statusColumn?.length) {
+      const enumDefinition = statusColumn[0].Type || '';
+      if (!enumDefinition.includes("'sold'")) {
+        await connection.execute(`
+          ALTER TABLE crop_posts
+          MODIFY COLUMN status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted', 'sold') DEFAULT 'active'
+        `);
+      }
+    }
 
 
 

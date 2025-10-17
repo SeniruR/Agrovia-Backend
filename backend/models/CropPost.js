@@ -282,8 +282,14 @@ class CropPost {
         unit = ?, price_per_unit = ?, minimum_quantity_bulk = ?, harvest_date = ?, expiry_date = ?,
         location = ?, district = ?, description = ?, organic_certified = ?,
         pesticide_free = ?, freshly_harvested = ?, contact_number = ?,
-        email = ?, images = ?, updated_at = NOW()
+        email = ?, images = ?,
+        status = CASE
+          WHEN status = 'deleted' THEN status
+          ELSE 'active'
+        END,
+        updated_at = NOW()
       WHERE id = ? AND farmer_id = ?
+        AND status != 'deleted'
     `;
 
     const values = [

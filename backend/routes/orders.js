@@ -417,8 +417,15 @@ router.post('/', authenticate, async (req, res) => {
       // Decrease inventory in crop_posts
       if (productId !== null) {
         await connection.execute(
-          `UPDATE crop_posts SET quantity = quantity - ? WHERE id = ?`,
-          [quantity, productId]
+          `UPDATE crop_posts
+             SET quantity = GREATEST(quantity - ?, 0),
+                 status = CASE
+                   WHEN quantity - ? <= 0 THEN 'inactive'
+                   ELSE status
+                 END,
+                 updated_at = NOW()
+           WHERE id = ?`,
+          [quantity, quantity, productId]
         );
       }
     }
