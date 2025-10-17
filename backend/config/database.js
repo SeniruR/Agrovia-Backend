@@ -244,6 +244,17 @@ const createTables = async (connection) => {
       )
     `);
 
+    // Ensure legacy schemas upgrade product image columns to LONGBLOB
+    const [productImageColumn] = await connection.query(`SHOW COLUMNS FROM products LIKE 'image'`);
+    if (productImageColumn?.length && productImageColumn[0].Type?.toLowerCase() !== 'longblob') {
+      await connection.execute(`ALTER TABLE products MODIFY image LONGBLOB NULL`);
+    }
+
+    const [productImagesImageColumn] = await connection.query(`SHOW COLUMNS FROM product_images LIKE 'image'`);
+    if (productImagesImageColumn?.length && productImagesImageColumn[0].Type?.toLowerCase() !== 'longblob') {
+      await connection.execute(`ALTER TABLE product_images MODIFY image LONGBLOB NULL`);
+    }
+
     // Seed common product categories if not present
     const defaultCategories = ['Seeds', 'Fertilizer', 'Chemical'];
     for (const name of defaultCategories) {

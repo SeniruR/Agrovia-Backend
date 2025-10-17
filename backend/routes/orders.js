@@ -492,6 +492,11 @@ router.post('/', authenticate, async (req, res) => {
       const productImage = rawProductImage && rawProductImage.length > 255 
         ? rawProductImage.substring(0, 255) 
         : rawProductImage;
+      const productTypeRaw = toStringOrNull(item.productType || item.product_type || item.sourceType);
+      let productType = (productTypeRaw || 'crop').toLowerCase();
+      if (!['crop', 'shop'].includes(productType)) {
+        productType = 'crop';
+      }
 
       // Insert order_items
       const [orderItemResult] = await connection.execute(
@@ -578,19 +583,40 @@ router.post('/', authenticate, async (req, res) => {
         // If this fails, allow rollback by throwing so transaction doesn't commit partially
         throw copyErr;
       }
-      // Decrease inventory in crop_posts
+      // Decrease inventory based on product type
       if (productId !== null) {
-        await connection.execute(
-          `UPDATE crop_posts
-             SET quantity = GREATEST(quantity - ?, 0),
-                 status = CASE
-                   WHEN quantity - ? <= 0 THEN 'inactive'
-                   ELSE status
-                 END,
-                 updated_at = NOW()
-           WHERE id = ?`,
-          [quantity, quantity, productId]
-        );
+        if (productType === 'shop') {
+          const [inventoryResult] = await connection.execute(
+            `UPDATE product_inventory
+               SET quantity = GREATEST(quantity - ?, 0),
+                   is_available = CASE
+                     WHEN quantity - ? <= 0 THEN 0
+                     ELSE is_available
+                   END
+             WHERE product_id = ?`,
+            [quantity, quantity, productId]
+          );
+
+          if (!inventoryResult || inventoryResult.affectedRows === 0) {
+            console.warn('⚠️ Order placement could not update product_inventory record', {
+              productId,
+              quantityRequested: quantity,
+              productType
+            });
+          }
+        } else {
+          await connection.execute(
+            `UPDATE crop_posts
+               SET quantity = GREATEST(quantity - ?, 0),
+                   status = CASE
+                     WHEN quantity - ? <= 0 THEN 'inactive'
+                     ELSE status
+                   END,
+                   updated_at = NOW()
+             WHERE id = ?`,
+            [quantity, quantity, productId]
+          );
+        }
       }
     }
     // Clear user's cart
