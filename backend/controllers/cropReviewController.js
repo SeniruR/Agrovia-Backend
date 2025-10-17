@@ -441,4 +441,165 @@ exports.getReviewAttachment = async (req, res) => {
   }
 };
 
+/**
+ * Update an existing review
+ */
+exports.updateReview = async (req, res) => {
+  let connection;
+  try {
+    // Get the review ID from the URL parameter
+    const { reviewId } = req.params;
+    const { rating, comment, buyer_id } = req.body;
+    
+    // Validate input
+    if (!rating) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating is required'
+      });
+    }
+    
+    // Get connection from the pool
+    connection = await db.getConnection();
+    
+    // Check if the review exists and belongs to the user
+    const [reviews] = await connection.execute(
+      'SELECT * FROM crop_reviews WHERE id = ?',
+      [reviewId]
+    );
+    
+    if (reviews.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
+    }
+    
+    // Check if the review belongs to the user
+    if (reviews[0].buyer_id !== parseInt(buyer_id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to update this review'
+      });
+    }
+    
+    // Process attachment if exists
+    let attachmentData = reviews[0].attachments;
+    let updateFields = '';
+    let updateParams = [];
+    
+    if (req.files && req.files.length > 0 && req.files[0].buffer) {
+      // Store the file binary data
+      attachmentData = req.files[0].buffer;
+      updateFields = 'rating = ?, comment = ?, attachments = ?, updated_at = NOW()';
+      updateParams = [rating, comment, attachmentData, reviewId];
+    } else {
+      // No new attachment, just update rating and comment
+      updateFields = 'rating = ?, comment = ?, updated_at = NOW()';
+      updateParams = [rating, comment, reviewId];
+    }
+    
+    // Update the review in the database
+    await connection.execute(
+      `UPDATE crop_reviews SET ${updateFields} WHERE id = ?`,
+      updateParams
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Review updated successfully',
+      review: {
+        id: reviewId,
+        rating,
+        comment,
+        attachment_urls: [`/api/v1/crop-reviews/${reviewId}/attachment`]
+      }
+    });
+  } catch (error) {
+    console.error('Error updating review:', error);
+    console.error('Request body:', req.body);
+    console.error('Request files:', req.files);
+    console.error('ReviewId:', req.params.reviewId);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update review',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? { 
+        stack: error.stack,
+        body: req.body,
+        files: req.files ? 'Files present' : 'No files' 
+      } : undefined
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
+/**
+ * Delete a review
+ */
+exports.deleteReview = async (req, res) => {
+  let connection;
+  try {
+    // Get the review ID from the URL parameter
+    const { reviewId } = req.params;
+    const { buyer_id } = req.query;
+    
+    if (!buyer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Buyer ID is required'
+      });
+    }
+    
+    // Get connection from the pool
+    connection = await db.getConnection();
+    
+    // Check if the review exists and belongs to the user
+    const [reviews] = await connection.execute(
+      'SELECT * FROM crop_reviews WHERE id = ?',
+      [reviewId]
+    );
+    
+    if (reviews.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
+    }
+    
+    // Check if the review belongs to the user
+    if (reviews[0].buyer_id !== parseInt(buyer_id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to delete this review'
+      });
+    }
+    
+    // Delete the review
+    await connection.execute(
+      'DELETE FROM crop_reviews WHERE id = ?',
+      [reviewId]
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Review deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting review:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete review',
+      error: error.message
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
 module.exports = exports;

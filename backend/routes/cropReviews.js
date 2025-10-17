@@ -46,4 +46,17 @@ router.get('/:reviewId/attachment', (req, res, next) => {
   return cropReviewController.getReviewAttachment(req, res, next);
 });
 
+// PUT /api/v1/crop-reviews/:reviewId - Update a review
+router.put(
+  '/:reviewId',
+  upload.array('attachments', 5),
+  cropReviewController.updateReview
+);
+
+// DELETE /api/v1/crop-reviews/:reviewId - Delete a review
+router.delete(
+  '/:reviewId',
+  cropReviewController.deleteReview
+);
+
 module.exports = router;
