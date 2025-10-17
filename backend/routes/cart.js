@@ -22,35 +22,61 @@ router.get('/', authenticate, async (req, res) => {
 
 // Add item to cart
 router.post('/', authenticate, async (req, res) => {
+  console.log('🛒 Cart POST request received:', {
+    userId: req.user?.id,
+    body: req.body
+  });
   try {
     const userId = req.user.id;
-    const { productId, quantity, productName, priceAtAddTime, productUnit, farmerName, location, productImage } = req.body;
+    const { productId, quantity, productName, priceAtAddTime, productUnit, farmerName, location, productImage, district, productType } = req.body;
 
-    // Check if the item already exists in the cart
+    console.log('📋 Processing cart addition:', {
+      userId,
+      productId,
+      quantity,
+      productName,
+      farmerName,
+      location,
+      district,
+      productType
+    });
+
+    // Check if the item already exists in the cart (considering both productId and productType)
     const [existingRows] = await pool.execute(
-      `SELECT * FROM carts WHERE userId = ? AND productId = ?`, [userId, productId]
+      `SELECT * FROM carts WHERE userId = ? AND productId = ? AND productType = ?`, 
+      [userId, productId, productType || 'crop']
     );
 
     if (existingRows.length > 0) {
       // Update quantity if item exists
+      console.log('🔄 Updating existing cart item');
       const existingItem = existingRows[0];
       const newQuantity = existingItem.quantity + quantity;
       await pool.execute(
         `UPDATE carts SET quantity = ?, priceAtAddTime = ?, updatedAt = NOW() WHERE id = ?`,
         [newQuantity, priceAtAddTime, existingItem.id]
       );
+      console.log('✅ Cart item updated successfully');
       res.status(200).json({ success: true, message: 'Cart item updated' });
     } else {
-      // Insert new item
-      await pool.execute(
-        `INSERT INTO carts (userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-        [userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage]
+      // Insert new item - productImage can now be LONGTEXT to handle base64 data URLs
+      console.log('➕ Adding new cart item');
+      
+      const insertResult = await pool.execute(
+        `INSERT INTO carts (userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage, district, productType, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage, district, productType || 'crop']
       );
+      console.log('✅ New cart item added successfully:', insertResult[0]);
       res.status(201).json({ success: true, message: 'Item added to cart' });
     }
   } catch (error) {
-    console.error('Error adding item to cart:', error);
+    console.error('❌ Error adding item to cart:', error);
+    console.error('🔍 Error details:', {
+      message: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage
+    });
     res.status(500).json({ success: false, message: 'Failed to add item to cart', error: error.message });
   }
 });

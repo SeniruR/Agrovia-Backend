@@ -258,36 +258,95 @@ router.post('/', authenticate, async (req, res) => {
     } = req.body;
     const userId = req.user.id;
 
+    console.log('📦 Order creation request:', {
+      orderId,
+      userId,
+      totalAmount,
+      currency,
+      deliveryName,
+      deliveryPhone,
+      deliveryAddress,
+      deliveryDistrict,
+      deliveryCountry,
+      itemsCount: Array.isArray(items) ? items.length : 0
+    });
+
+    // Helpers to sanitize values for SQL bindings (mysql2 does not accept undefined)
+    const nvl = (v, fallback = null) => (v === undefined ? fallback : v);
+    const toNumberOrNull = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const toStringOrNull = (v) => (v === undefined || v === null ? null : String(v));
+
+    const safeStatus = toStringOrNull(status) || 'PAID';
+    const safeTotal = toNumberOrNull(totalAmount) ?? 0;
+    const safeCurrency = toStringOrNull(currency) || 'LKR';
+    const safeDeliveryName = toStringOrNull(deliveryName);
+    const safeDeliveryPhone = toStringOrNull(deliveryPhone);
+    const safeDeliveryAddress = toStringOrNull(deliveryAddress);
+    const safeDeliveryDistrict = toStringOrNull(deliveryDistrict);
+    const safeDeliveryCountry = toStringOrNull(deliveryCountry);
+    const safeOrderId = toStringOrNull(orderId) || `ORDER-${Date.now()}`;
+    const safePaymentId = toStringOrNull(paymentId) || null;
+
     // Insert order
     const [orderResult] = await connection.execute(
       `INSERT INTO orders (
         userId, orderId, paymentId, status, totalAmount, currency,
         deliveryName, deliveryPhone, deliveryAddress, deliveryDistrict, deliveryCountry
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [userId, orderId, paymentId, status, totalAmount, currency,
-       deliveryName, deliveryPhone, deliveryAddress, deliveryDistrict, deliveryCountry]
+      [userId,
+       safeOrderId,
+       safePaymentId,
+       safeStatus,
+       safeTotal,
+       safeCurrency,
+       safeDeliveryName,
+       safeDeliveryPhone,
+       safeDeliveryAddress,
+       safeDeliveryDistrict,
+       safeDeliveryCountry]
     );
     const newOrderId = orderResult.insertId;
 
     // Insert order items and adjust crop inventory
-    for (const item of items) {
+    for (const item of (Array.isArray(items) ? items : [])) {
+      // Sanitize per-item values
+      const productId = toNumberOrNull(item.id);
+      const productName = toStringOrNull(item.productName || item.name) || 'Product';
+      const quantity = toNumberOrNull(item.quantity) ?? 1;
+      const unitPrice = toNumberOrNull(item.unitPrice ?? item.price) ?? 0;
+      // Ensure subtotal is always a valid number
+      const subtotalValue = Number.isFinite(quantity * unitPrice) ? (quantity * unitPrice) : 0;
+      const subtotal = parseFloat(subtotalValue.toFixed(2));
+      const productUnit = toStringOrNull(item.productUnit || item.unit) || null;
+      const farmerName = toStringOrNull(item.farmerName || item.farmer) || null;
+      const location = toStringOrNull(item.location || item.district) || null;
+      // Truncate productImage to fit varchar(255) column
+      const rawProductImage = toStringOrNull(item.productImage || item.image);
+      const productImage = rawProductImage && rawProductImage.length > 255 
+        ? rawProductImage.substring(0, 255) 
+        : rawProductImage;
+
       // Insert order_items
       const [orderItemResult] = await connection.execute(
         `INSERT INTO order_items (
           orderId, productId, productName, quantity, unitPrice, subtotal,
-          productUnit, farmerName, location, productImage
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          productUnit, farmerName, location, productImage, createdAt, updatedAt, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
         [
           newOrderId,
-          item.id,
-          item.productName || item.name,
-          item.quantity,
-          item.unitPrice || item.price,
-          (item.quantity * (item.unitPrice || item.price)).toFixed(2),
-          item.productUnit || item.unit,
-          item.farmerName || item.farmer,
-          item.location,
-          item.productImage || item.image || null
+          productId,
+          productName,
+          quantity,
+          unitPrice,
+          subtotal,
+          productUnit,
+          farmerName,
+          location,
+          productImage,
+          'pending' // default status
         ]
       );
       const newOrderItemId = orderItemResult.insertId;
@@ -356,10 +415,12 @@ router.post('/', authenticate, async (req, res) => {
         throw copyErr;
       }
       // Decrease inventory in crop_posts
-      await connection.execute(
-        `UPDATE crop_posts SET quantity = quantity - ? WHERE id = ?`,
-        [item.quantity, item.id]
-      );
+      if (productId !== null) {
+        await connection.execute(
+          `UPDATE crop_posts SET quantity = quantity - ? WHERE id = ?`,
+          [quantity, productId]
+        );
+      }
     }
     // Clear user's cart
     await connection.execute('DELETE FROM carts WHERE userId = ?', [userId]);
