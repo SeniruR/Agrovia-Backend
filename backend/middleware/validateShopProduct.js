@@ -24,6 +24,8 @@ module.exports = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     return res.status(401).json({ 
+      success: false,
+      message: 'Authorization token required',
       error: 'Authorization token required',
       code: 'AUTH_REQUIRED'
     });
@@ -35,6 +37,8 @@ module.exports = (req, res, next) => {
     req.userId = decoded.id;
   } catch (err) {
     return res.status(401).json({ 
+      success: false,
+      message: 'Invalid or expired token',
       error: 'Invalid or expired token',
       code: 'INVALID_TOKEN'
     });
@@ -46,17 +50,21 @@ module.exports = (req, res, next) => {
       console.error('File upload error:', err);
       
       if (err instanceof multer.MulterError) {
+        const details = err.code === 'LIMIT_UNEXPECTED_FILE' 
+          ? 'Invalid file field name' 
+          : err.message;
+
         return res.status(400).json({
           success: false,
-          error: err.code === 'LIMIT_UNEXPECTED_FILE' 
-            ? 'Invalid file field name' 
-            : err.message,
+          message: details,
+          error: details,
           code: err.code
         });
       }
       
       return res.status(400).json({
         success: false,
+        message: err.message,
         error: err.message
       });
     }
@@ -65,7 +73,8 @@ module.exports = (req, res, next) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
-        error: "At least one product image is required"
+        message: 'At least one product image is required',
+        error: 'At least one product image is required'
       });
     }
 
@@ -84,6 +93,7 @@ module.exports = (req, res, next) => {
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
+        message: 'Missing required fields',
         error: 'Missing required fields',
         missingFields
       });
@@ -93,6 +103,7 @@ module.exports = (req, res, next) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(req.body.email)) {
       return res.status(400).json({ 
         success: false,
+        message: 'Invalid email format',
         error: 'Invalid email format' 
       });
     }
@@ -101,6 +112,7 @@ module.exports = (req, res, next) => {
     if (!/^(\+94|0)?[0-9]{9,10}$/.test(req.body.phone_no.replace(/\s/g, ''))) {
       return res.status(400).json({ 
         success: false,
+        message: 'Invalid Sri Lankan phone number',
         error: 'Invalid Sri Lankan phone number' 
       });
     }
@@ -109,6 +121,7 @@ module.exports = (req, res, next) => {
     if (isNaN(req.body.price) || parseFloat(req.body.price) <= 0) {
       return res.status(400).json({ 
         success: false,
+        message: 'Price must be a positive number',
         error: 'Price must be a positive number' 
       });
     }
@@ -118,6 +131,7 @@ module.exports = (req, res, next) => {
     if (!validProductTypes.includes(req.body.product_type)) {
       return res.status(400).json({
         success: false,
+        message: 'Invalid product type',
         error: 'Invalid product type',
         validTypes: validProductTypes
       });

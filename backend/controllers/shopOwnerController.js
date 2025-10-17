@@ -30,12 +30,28 @@ exports.getAllShopOwners = async (req, res) => {
 
 // Approve shop owner
 exports.approveShopOwner = async (req, res) => {
+  const connection = await db.pool.getConnection();
   try {
     const id = req.params.id;
-    await User.setActive(id, 1);
+
+    await connection.beginTransaction();
+
+    await connection.execute('UPDATE users SET is_active = 1 WHERE id = ?', [id]);
+    await connection.execute('UPDATE shop_details SET is_active = 1 WHERE user_id = ?', [id]);
+    await connection.execute('DELETE FROM disable_accounts WHERE user_id = ? AND case_id = 5', [id]);
+
+    await connection.commit();
+
     res.json({ success: true });
   } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (_) {
+      // ignore rollback errors
+    }
     res.status(500).json({ success: false, message: 'Error approving shop owner', error: err.message });
+  } finally {
+    connection.release();
   }
 };
 
@@ -52,14 +68,27 @@ exports.rejectShopOwner = async (req, res) => {
 
 // Suspend shop owner
 exports.suspendShopOwner = async (req, res) => {
+  const connection = await db.pool.getConnection();
   try {
     const id = req.params.id;
-    await User.setActive(id, 0);
-    // Insert into disable_accounts with case_id 5 (suspended)
-    const insertQuery = 'INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 5, NOW())';
-    await db.pool.execute(insertQuery, [id]);
+
+    await connection.beginTransaction();
+
+    await connection.execute('UPDATE shop_details SET is_active = 0 WHERE user_id = ?', [id]);
+    await connection.execute('DELETE FROM disable_accounts WHERE user_id = ? AND case_id = 5', [id]);
+    await connection.execute('INSERT INTO disable_accounts (user_id, case_id, created_at) VALUES (?, 5, NOW())', [id]);
+
+    await connection.commit();
+
     res.json({ success: true });
   } catch (err) {
+    try {
+      await connection.rollback();
+    } catch (_) {
+      // ignore rollback errors
+    }
     res.status(500).json({ success: false, message: 'Error suspending shop owner', error: err.message });
+  } finally {
+    connection.release();
   }
 };

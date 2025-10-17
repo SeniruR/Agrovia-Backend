@@ -9,7 +9,7 @@ router.get('/', authenticate, async (req, res) => {
     const userId = req.user.id;
     // Fetch orders for the user
     const [orders] = await db.execute(
-      `SELECT id, orderId AS externalOrderId, status, totalAmount, currency, createdAt
+      `SELECT id, userId, orderId AS externalOrderId, status, totalAmount, currency, createdAt
        FROM orders WHERE userId = ? ORDER BY createdAt DESC`,
       [userId]
     );
@@ -45,18 +45,40 @@ router.get('/', authenticate, async (req, res) => {
     // Fetch product origin (location/district) from crop_posts for these products
     const productIds = items.map(i => i.productId).filter(Boolean);
     const productPlaceholders = productIds.length > 0 ? productIds.map(() => '?').join(',') : 'NULL';
-    const productMap = {};
+    const productMetaMap = {};
     if (productIds.length > 0) {
-      // Join with users to grab farmer name and phone
-      const [productsRows] = await db.execute(
+      // Metadata from crop posts (farmer linkage + location)
+      const [cropRows] = await db.execute(
         `SELECT cp.id, cp.location, cp.district, cp.farmer_id, u.full_name as farmer_name, u.phone_number as farmer_phone
          FROM crop_posts cp
          LEFT JOIN users u ON cp.farmer_id = u.id
          WHERE cp.id IN (${productPlaceholders})`,
         productIds
       );
-      for (const p of productsRows) {
-        productMap[p.id] = p;
+      for (const row of cropRows) {
+        productMetaMap[row.id] = {
+          ...(productMetaMap[row.id] || {}),
+          location: row.location,
+          district: row.district,
+          farmer_id: row.farmer_id,
+          farmer_name: row.farmer_name,
+          farmer_phone: row.farmer_phone
+        };
+      }
+
+      // Metadata from shop products (shop owner linkage)
+      const [shopRows] = await db.execute(
+        `SELECT p.id, sd.user_id AS shop_owner_id
+         FROM products p
+         LEFT JOIN shop_details sd ON sd.id = p.shop_id
+         WHERE p.id IN (${productPlaceholders})`,
+        productIds
+      );
+      for (const row of shopRows) {
+        productMetaMap[row.id] = {
+          ...(productMetaMap[row.id] || {}),
+          shop_owner_id: row.shop_owner_id
+        };
       }
     }
 
@@ -89,17 +111,19 @@ router.get('/', authenticate, async (req, res) => {
       // final item status: prefer the order_items.status column, otherwise fallback to transport status
       const finalRaw = item.status || transportRawStatus || null;
       const finalStatus = canonicalizeStatus(finalRaw);
+      const meta = productMetaMap[item.productId] || {};
       return {
         ...item,
         status: finalStatus,
         transports: itemTransports,
         _transport_raw_status: transportRawStatus,
-        // Always prefer authoritative location/district from crop_posts (productMap)
-        productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
-        productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
-        productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
-        // Note: order_items currently doesn't store farmer phone; use productMap when available.
-        productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
+        // Prefer authoritative metadata but fall back to snapshot values on the order item
+        productLocation: meta.location || item.location || null,
+        productDistrict: meta.district || null,
+        productFarmerName: item.farmerName || meta.farmer_name || null,
+        productFarmerPhone: meta.farmer_phone || null,
+        productFarmerId: meta.farmer_id || null,
+        productShopOwnerId: meta.shop_owner_id || null
       };
     });
 
@@ -128,6 +152,7 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
     const farmerId = req.user.id;
 
     // Find crop posts owned by this farmer
+
     const [posts] = await db.execute(
       `SELECT id FROM crop_posts WHERE farmer_id = ?`,
       [farmerId]
@@ -168,17 +193,40 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
       itemIds
     );
 
-    // Fetch product origin info for these products
-    const productMap = {};
+    // Fetch product metadata for these products
+    const productMetaMap = {};
     if (productIds.length > 0) {
-      const [productsRows] = await db.execute(
+      const [cropRows] = await db.execute(
         `SELECT cp.id, cp.location, cp.district, cp.farmer_id, u.full_name as farmer_name, u.phone_number as farmer_phone
          FROM crop_posts cp
          LEFT JOIN users u ON cp.farmer_id = u.id
          WHERE cp.id IN (${productPlaceholders})`,
         productIds
       );
-      for (const p of productsRows) productMap[p.id] = p;
+      for (const row of cropRows) {
+        productMetaMap[row.id] = {
+          ...(productMetaMap[row.id] || {}),
+          location: row.location,
+          district: row.district,
+          farmer_id: row.farmer_id,
+          farmer_name: row.farmer_name,
+          farmer_phone: row.farmer_phone
+        };
+      }
+
+      const [shopRows] = await db.execute(
+        `SELECT p.id, sd.user_id AS shop_owner_id
+         FROM products p
+         LEFT JOIN shop_details sd ON sd.id = p.shop_id
+         WHERE p.id IN (${productPlaceholders})`,
+        productIds
+      );
+      for (const row of shopRows) {
+        productMetaMap[row.id] = {
+          ...(productMetaMap[row.id] || {}),
+          shop_owner_id: row.shop_owner_id
+        };
+      }
     }
 
     // Group transports by order_item_id
@@ -207,15 +255,18 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
       const transportRawStatus = primaryTransport ? (primaryTransport.status || primaryTransport.transport_status || primaryTransport.order_transport_status || primaryTransport.delivery_status || primaryTransport.transporter_status) : null;
       const finalRaw = item.status || transportRawStatus || null;
       const finalStatus = canonicalizeStatus_farmer(finalRaw);
+      const meta = productMetaMap[item.productId] || {};
       return {
         ...item,
         status: finalStatus,
         transports: itemTransports,
         _transport_raw_status: transportRawStatus,
-        productLocation: (productMap[item.productId] && productMap[item.productId].location) || null,
-        productDistrict: (productMap[item.productId] && productMap[item.productId].district) || null,
-        productFarmerName: item.farmerName || (productMap[item.productId] && productMap[item.productId].farmer_name) || null,
-        productFarmerPhone: (productMap[item.productId] && productMap[item.productId].farmer_phone) || null
+        productLocation: meta.location || item.location || null,
+        productDistrict: meta.district || null,
+        productFarmerName: item.farmerName || meta.farmer_name || null,
+        productFarmerPhone: meta.farmer_phone || null,
+        productFarmerId: meta.farmer_id || null,
+        productShopOwnerId: meta.shop_owner_id || null
       };
     });
 
@@ -238,6 +289,119 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to fetch farmer orders', error: err.message });
   }
 });
+
+// PATCH /api/v1/orders/:orderId/items/:itemId/collect
+router.patch('/:orderId/items/:itemId/collect', authenticate, async (req, res) => {
+  try {
+    const orderId = Number(req.params.orderId);
+    const itemId = Number(req.params.itemId);
+
+    if (!Number.isInteger(orderId) || !Number.isInteger(itemId)) {
+      return res.status(400).json({ success: false, message: 'Invalid order or item identifier' });
+    }
+
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    const [itemRows] = await db.execute(
+      `SELECT oi.id AS orderItemId,
+              oi.status AS itemStatus,
+              oi.orderId,
+              o.userId AS buyerId,
+              o.status AS orderStatus,
+              cp.farmer_id AS farmerId,
+              sd.user_id AS shopOwnerId
+       FROM order_items oi
+       INNER JOIN orders o ON o.id = oi.orderId
+       LEFT JOIN crop_posts cp ON cp.id = oi.productId
+       LEFT JOIN products p ON p.id = oi.productId
+       LEFT JOIN shop_details sd ON sd.id = p.shop_id
+       WHERE oi.id = ? AND oi.orderId = ?`,
+      [itemId, orderId]
+    );
+
+    if (!itemRows || itemRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order item not found' });
+    }
+
+    const record = itemRows[0];
+
+    const allowedIds = new Set(
+      [record.buyerId, record.farmerId, record.shopOwnerId]
+        .filter((value) => value !== null && value !== undefined)
+    );
+    const privilegedRole = userRole === 'admin' || userRole === 'moderator' || userRole === 'main_moderator';
+
+    if (!allowedIds.has(userId) && !privilegedRole) {
+      return res.status(403).json({ success: false, message: 'You do not have permission to update this order item' });
+    }
+
+    // Ensure the item is a pickup (no transport assignments)
+    const [transportCountRows] = await db.execute(
+      `SELECT COUNT(*) AS count FROM order_transports WHERE order_item_id = ?`,
+      [itemId]
+    );
+    if ((transportCountRows[0]?.count || 0) > 0) {
+      return res.status(400).json({ success: false, message: 'Items with transport assignments cannot be marked as collected manually' });
+    }
+
+    const currentStatus = (record.itemStatus || '').toString().toLowerCase();
+    if (['completed', 'delivered'].includes(currentStatus)) {
+      return res.json({
+        success: true,
+        data: {
+          item: {
+            id: itemId,
+            orderId,
+            status: 'completed'
+          },
+          order: {
+            id: orderId,
+            status: record.orderStatus
+          }
+        }
+      });
+    }
+
+    await db.execute(
+      `UPDATE order_items SET status = ?, updatedAt = NOW() WHERE id = ? AND orderId = ?`,
+      ['completed', itemId, orderId]
+    );
+
+    // If all items in the order are now completed/delivered, mark order as completed
+    const [remainingRows] = await db.execute(
+      `SELECT COUNT(*) AS remaining
+       FROM order_items
+       WHERE orderId = ? AND LOWER(status) NOT IN ('completed', 'delivered')`,
+      [orderId]
+    );
+
+    let updatedOrderStatus = record.orderStatus;
+    if ((remainingRows[0]?.remaining || 0) === 0) {
+      await db.execute(`UPDATE orders SET status = 'COMPLETED' WHERE id = ?`, [orderId]);
+      updatedOrderStatus = 'COMPLETED';
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        item: {
+          id: itemId,
+          orderId,
+          status: 'completed'
+        },
+        order: {
+          id: orderId,
+          status: updatedOrderStatus
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Error marking order item as collected:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update order item status', error: err.message });
+  }
+});
+
 // POST /api/v1/orders
 router.post('/', authenticate, async (req, res) => {
   const connection = await db.getConnection();
@@ -328,6 +492,11 @@ router.post('/', authenticate, async (req, res) => {
       const productImage = rawProductImage && rawProductImage.length > 255 
         ? rawProductImage.substring(0, 255) 
         : rawProductImage;
+      const productTypeRaw = toStringOrNull(item.productType || item.product_type || item.sourceType);
+      let productType = (productTypeRaw || 'crop').toLowerCase();
+      if (!['crop', 'shop'].includes(productType)) {
+        productType = 'crop';
+      }
 
       // Insert order_items
       const [orderItemResult] = await connection.execute(
@@ -414,12 +583,40 @@ router.post('/', authenticate, async (req, res) => {
         // If this fails, allow rollback by throwing so transaction doesn't commit partially
         throw copyErr;
       }
-      // Decrease inventory in crop_posts
+      // Decrease inventory based on product type
       if (productId !== null) {
-        await connection.execute(
-          `UPDATE crop_posts SET quantity = quantity - ? WHERE id = ?`,
-          [quantity, productId]
-        );
+        if (productType === 'shop') {
+          const [inventoryResult] = await connection.execute(
+            `UPDATE product_inventory
+               SET quantity = GREATEST(quantity - ?, 0),
+                   is_available = CASE
+                     WHEN quantity - ? <= 0 THEN 0
+                     ELSE is_available
+                   END
+             WHERE product_id = ?`,
+            [quantity, quantity, productId]
+          );
+
+          if (!inventoryResult || inventoryResult.affectedRows === 0) {
+            console.warn('⚠️ Order placement could not update product_inventory record', {
+              productId,
+              quantityRequested: quantity,
+              productType
+            });
+          }
+        } else {
+          await connection.execute(
+            `UPDATE crop_posts
+               SET quantity = GREATEST(quantity - ?, 0),
+                   status = CASE
+                     WHEN quantity - ? <= 0 THEN 'inactive'
+                     ELSE status
+                   END,
+                   updated_at = NOW()
+             WHERE id = ?`,
+            [quantity, quantity, productId]
+          );
+        }
       }
     }
     // Clear user's cart

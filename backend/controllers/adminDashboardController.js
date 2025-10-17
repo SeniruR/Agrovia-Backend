@@ -191,17 +191,20 @@ const getOverviewStats = async () => {
 };
 
 const getMonthlyRevenue = async (months = 6) => {
+  const billingStatusFilters = ['completed', 'paid', 'success', 'successful'];
+  const billingStatusPlaceholders = billingStatusFilters.map(() => '?').join(', ');
   const [rows] = await runQuery(`
     SELECT 
-      DATE_FORMAT(payment_date, '%Y-%m-01') AS month,
+      DATE_FORMAT(COALESCE(payment_date, updated_at, created_at), '%Y-%m-01') AS month,
       SUM(amount) AS revenue,
       COUNT(DISTINCT user_id) AS paying_users
     FROM billing_history
-    WHERE payment_status IN ('completed', 'paid', 'success')
-      AND payment_date >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL ? MONTH)
-    GROUP BY DATE_FORMAT(payment_date, '%Y-%m-01')
+    WHERE LOWER(COALESCE(payment_status, '')) IN (${billingStatusPlaceholders})
+      AND COALESCE(payment_date, updated_at, created_at) >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL ? MONTH)
+      AND COALESCE(payment_date, updated_at, created_at) IS NOT NULL
+    GROUP BY DATE_FORMAT(COALESCE(payment_date, updated_at, created_at), '%Y-%m-01')
     ORDER BY month ASC
-  `, [months - 1]);
+  `, [...billingStatusFilters, months - 1]);
 
   return rows.map(row => ({
     month: row.month,
