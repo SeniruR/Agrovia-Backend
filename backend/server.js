@@ -110,6 +110,11 @@ app.use('/api/v1/admin', adminRoutes);
 // Shop reviews routes
 const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
 app.use('/api/v1/shop-reviews', shopReviewsRoutes);
+
+// Pest alert routes
+const pestAlertRoutes = require('./routes/pestAlert.routes');
+app.use('/api', pestAlertRoutes);
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
