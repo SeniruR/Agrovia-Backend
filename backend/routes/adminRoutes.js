@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { getDashboardData } = require('../controllers/adminDashboardController');
 
 // Load admin controller with a defensive check so startup errors are clearer
 const adminController = require('../controllers/adminController');
@@ -20,6 +21,17 @@ if (typeof getAllShopsWithItems !== 'function' || typeof setShopActiveStatus !==
 router.get('/shops', getAllShopsWithItems);
 // PATCH /api/v1/admin/shops/:id/active
 router.patch('/shops/:id/active', setShopActiveStatus);
+
+// Admin dashboard aggregated stats
+router.get('/dashboard', async (req, res) => {
+  try {
+    const data = await getDashboardData();
+    return res.json({ success: true, data });
+  } catch (error) {
+    console.error('Failed to load admin dashboard data:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load dashboard data' });
+  }
+});
 
 // Subscription management routes
 
