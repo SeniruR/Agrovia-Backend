@@ -19,6 +19,21 @@ exports.addReply = async (req, res, next) => {
   }
 };
 
+// Delete admin reply for a crop complaint
+exports.deleteReply = async (req, res, next) => {
+  try {
+    // Update to set reply to null and replyed_at to null
+    const result = await CropComplaint.update(req.params.id, { reply: null, replyed_at: null });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+    res.json({ success: true, message: 'Reply deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting reply:', error);
+    next(error);
+  }
+};
+
 // Create a new crop complaint (with BLOB attachments in main table)
 exports.createComplaint = async (req, res, next) => {
   try {
