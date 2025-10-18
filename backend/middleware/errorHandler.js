@@ -72,6 +72,11 @@ const errorHandler = (err, req, res, next) => {
 
 // 404 handler
 const notFound = (req, res) => {
+  // Check if it's a file access attempt in the uploads directory
+  if (req.originalUrl.startsWith('/uploads/')) {
+    console.error(`File not found: ${req.originalUrl}`);
+  }
+  
   res.status(404).json({
     success: false,
     message: `Route ${req.originalUrl} not found`
