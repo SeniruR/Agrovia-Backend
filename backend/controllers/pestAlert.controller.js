@@ -3,13 +3,15 @@ const { pool } = require('../config/database');
 
 exports.createPestAlert = async (req, res) => {
   try {
-    const { pestName, symptoms, severity, recommendations } = req.body;
-    // Extract moderatorId from token (assuming req.user is set by auth middleware)
-    const moderatorId = req.user?.id;
-    if (!moderatorId || !pestName || !symptoms || !severity || !Array.isArray(recommendations)) {
+    const { pestName, symptoms, severity, recommendations, postedByUserId } = req.body;
+    // Extract user ID from token (can be any authenticated user)
+    const userId = req.user?.id || postedByUserId;
+    
+    if (!userId || !pestName || !symptoms || !severity || !Array.isArray(recommendations)) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    await PestAlertModel.createPestAlert(moderatorId, pestName, symptoms, severity, recommendations);
+    
+    await PestAlertModel.createPestAlert(userId, pestName, symptoms, severity, recommendations);
     res.status(201).json({ message: 'Pest alert created successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -18,12 +20,15 @@ exports.createPestAlert = async (req, res) => {
 
 exports.getAllPestAlerts = async (req, res) => {
   try {
-    // Get all pest alerts with their recommendations
+    // Get all pest alerts with their recommendations and author information
     const [alerts] = await pool.execute(`
-      SELECT pa.*, 
+      SELECT pa.*,
+             u.name as authorName,
+             u.email as authorEmail,
              GROUP_CONCAT(pr.recommendation SEPARATOR '|||') as recommendations
       FROM PestAlerts pa
       LEFT JOIN PestRecommendations pr ON pa.id = pr.pestAlertId
+      LEFT JOIN users u ON pa.moderatorId = u.id
       GROUP BY pa.id
       ORDER BY pa.createdAt DESC
     `);
@@ -31,7 +36,9 @@ exports.getAllPestAlerts = async (req, res) => {
     // Process recommendations to convert from string back to array
     const processedAlerts = alerts.map(alert => ({
       ...alert,
-      recommendations: alert.recommendations ? alert.recommendations.split('|||') : []
+      recommendations: alert.recommendations ? alert.recommendations.split('|||') : [],
+      // Add the userId for ownership checking (use moderatorId as postedByUserId)
+      postedByUserId: alert.moderatorId
     }));
     
     res.json(processedAlerts);
@@ -43,13 +50,14 @@ exports.getAllPestAlerts = async (req, res) => {
 exports.deletePestAlert = async (req, res) => {
   try {
     const { id } = req.params;
-    const moderatorId = req.user?.id;
+    const userId = req.user?.id;
+    const userType = req.user?.type;
 
-    if (!moderatorId) {
+    if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Check if the pest alert exists and belongs to the user (optional security check)
+    // Check if the pest alert exists
     const [alertCheck] = await pool.execute(
       'SELECT moderatorId FROM PestAlerts WHERE id = ?',
       [id]
@@ -59,8 +67,10 @@ exports.deletePestAlert = async (req, res) => {
       return res.status(404).json({ error: 'Pest alert not found' });
     }
 
-    // Optional: Only allow the creator to delete their own alert
-    if (alertCheck[0].moderatorId !== moderatorId) {
+    // Check permissions: all users (including moderators) can only delete their own alerts
+    const isOwner = alertCheck[0].moderatorId === userId;
+
+    if (!isOwner) {
       return res.status(403).json({ error: 'You can only delete your own alerts' });
     }
 
