@@ -11,33 +11,41 @@ const ShopProductModel = {
   // Get all products (for admin/listing)
   getAll: async () => {
     const [rows] = await pool.execute(`
-      SELECT p.id AS productId, p.shop_id, p.product_name, p.brand_name, p.description,
-        p.category_id, p.image AS primary_image, p.image_mime AS primary_mime,
-        inv.unit_type, inv.unit_price, inv.quantity, inv.is_available,
-        pc.name AS category_name,
-             sd.id AS shop_detail_id, sd.shop_name,
-             sd.is_active,
-             u.full_name AS owner_name,
-             COALESCE(sd.shop_phone_number, u.phone_number) AS phone_no,
-             COALESCE(sd.shop_email, u.email) AS email,
-             sd.shop_address,
-             sd.business_registration_number,
-             sd.shop_description,
-             sd.shop_category,
-             sd.operating_hours,
-             sd.opening_days,
-             sd.delivery_areas,
-             sd.latitude,
-             sd.longitude,
-             sd.shop_image AS shop_image_blob, sd.shop_image_mime,
-             NULL AS city,
-        pi.id AS image_id, pi.image AS image_blob, pi.image_mime AS image_mime
+   SELECT p.id AS productId, p.shop_id, p.product_name, p.brand_name, p.description,
+     p.category_id, p.image AS primary_image, p.image_mime AS primary_mime,
+     inv.unit_type, inv.unit_price, inv.quantity, inv.is_available,
+     pc.name AS category_name,
+       sd.id AS shop_detail_id, sd.shop_name,
+       sd.is_active,
+       u.full_name AS owner_name,
+       COALESCE(sd.shop_phone_number, u.phone_number) AS phone_no,
+       COALESCE(sd.shop_email, u.email) AS email,
+       sd.shop_address,
+       sd.business_registration_number,
+       sd.shop_description,
+       sd.shop_category,
+       sd.operating_hours,
+       sd.opening_days,
+       sd.delivery_areas,
+       sd.latitude,
+       sd.longitude,
+       sd.shop_image AS shop_image_blob, sd.shop_image_mime,
+       NULL AS city,
+       sr.average_rating,
+       sr.review_count,
+       sr.last_reviewed_at,
+     pi.id AS image_id, pi.image AS image_blob, pi.image_mime AS image_mime
       FROM products p
       LEFT JOIN product_inventory inv ON inv.product_id = p.id
       LEFT JOIN product_images pi ON pi.product_id = p.id
       LEFT JOIN product_categories pc ON pc.id = p.category_id
       LEFT JOIN shop_details sd ON sd.id = p.shop_id
       LEFT JOIN users u ON u.id = sd.user_id
+      LEFT JOIN (
+        SELECT shop_id, AVG(rating) AS average_rating, COUNT(*) AS review_count, MAX(created_at) AS last_reviewed_at
+        FROM shop_reviews
+        GROUP BY shop_id
+      ) sr ON sr.shop_id = p.id
       ORDER BY p.id DESC
     `);
 
@@ -74,6 +82,9 @@ const ShopProductModel = {
           price: r.unit_price,
           available_quantity: r.quantity,
           is_available: r.is_available,
+          average_rating: r.average_rating !== null && r.average_rating !== undefined ? Number(r.average_rating) : null,
+          review_count: r.review_count !== null && r.review_count !== undefined ? Number(r.review_count) : 0,
+          last_reviewed_at: r.last_reviewed_at,
           images: []
         });
         // primary image
@@ -108,32 +119,40 @@ const ShopProductModel = {
     const placeholders = shopIds.map(() => '?').join(',');
     const [rows] = await pool.execute(`
       SELECT p.id AS productId, p.shop_id, p.product_name, p.brand_name, p.description,
-             p.category_id, p.image AS primary_image, p.image_mime AS primary_mime,
-             inv.unit_type, inv.unit_price, inv.quantity, inv.is_available,
-             pc.name AS category_name,
-             sd.shop_name,
-             sd.is_active,
-             u.full_name AS owner_name,
-             COALESCE(sd.shop_phone_number, u.phone_number) AS phone_no,
-             COALESCE(sd.shop_email, u.email) AS email,
-             sd.shop_address,
-             sd.business_registration_number,
-             sd.shop_description,
-             sd.shop_category,
-             sd.operating_hours,
-             sd.opening_days,
-             sd.delivery_areas,
-             sd.latitude,
-             sd.longitude,
-             sd.shop_image AS shop_image_blob, sd.shop_image_mime,
-             NULL AS city,
-             pi.id AS image_id, pi.image AS image_blob, pi.image_mime AS image_mime
+        p.category_id, p.image AS primary_image, p.image_mime AS primary_mime,
+        inv.unit_type, inv.unit_price, inv.quantity, inv.is_available,
+        pc.name AS category_name,
+        sd.shop_name,
+        sd.is_active,
+        u.full_name AS owner_name,
+        COALESCE(sd.shop_phone_number, u.phone_number) AS phone_no,
+        COALESCE(sd.shop_email, u.email) AS email,
+        sd.shop_address,
+        sd.business_registration_number,
+        sd.shop_description,
+        sd.shop_category,
+        sd.operating_hours,
+        sd.opening_days,
+        sd.delivery_areas,
+        sd.latitude,
+        sd.longitude,
+        sd.shop_image AS shop_image_blob, sd.shop_image_mime,
+        NULL AS city,
+        sr.average_rating,
+        sr.review_count,
+        sr.last_reviewed_at,
+        pi.id AS image_id, pi.image AS image_blob, pi.image_mime AS image_mime
       FROM products p
       LEFT JOIN product_inventory inv ON inv.product_id = p.id
       LEFT JOIN product_images pi ON pi.product_id = p.id
       LEFT JOIN product_categories pc ON pc.id = p.category_id
       LEFT JOIN shop_details sd ON sd.id = p.shop_id
       LEFT JOIN users u ON u.id = sd.user_id
+      LEFT JOIN (
+        SELECT shop_id, AVG(rating) AS average_rating, COUNT(*) AS review_count, MAX(created_at) AS last_reviewed_at
+        FROM shop_reviews
+        GROUP BY shop_id
+      ) sr ON sr.shop_id = p.id
       WHERE p.shop_id IN (${placeholders})
       ORDER BY p.id DESC
     `, shopIds);
@@ -170,6 +189,9 @@ const ShopProductModel = {
           price: r.unit_price,
           available_quantity: r.quantity,
           is_available: r.is_available,
+          average_rating: r.average_rating !== null && r.average_rating !== undefined ? Number(r.average_rating) : null,
+          review_count: r.review_count !== null && r.review_count !== undefined ? Number(r.review_count) : 0,
+          last_reviewed_at: r.last_reviewed_at,
           images: []
         });
         if (r.primary_image) {
@@ -281,6 +303,9 @@ const ShopProductModel = {
         COALESCE(sd.shop_email, u.email) AS email,
         sd.shop_address,
         NULL AS city,
+        sr.average_rating,
+        sr.review_count,
+        sr.last_reviewed_at,
         pi.id AS image_id, pi.image AS image_blob, pi.image_mime AS image_mime
       FROM products p
       LEFT JOIN product_inventory inv ON inv.product_id = p.id
@@ -288,6 +313,11 @@ const ShopProductModel = {
       LEFT JOIN product_categories pc ON pc.id = p.category_id
       LEFT JOIN shop_details sd ON sd.id = p.shop_id
       LEFT JOIN users u ON u.id = sd.user_id
+      LEFT JOIN (
+        SELECT shop_id, AVG(rating) AS average_rating, COUNT(*) AS review_count, MAX(created_at) AS last_reviewed_at
+        FROM shop_reviews
+        GROUP BY shop_id
+      ) sr ON sr.shop_id = p.id
       WHERE p.id = ?
     `, [productId]);
 
@@ -323,6 +353,9 @@ const ShopProductModel = {
           price: r.unit_price,
           available_quantity: r.quantity,
           is_available: r.is_available,
+          average_rating: r.average_rating !== null && r.average_rating !== undefined ? Number(r.average_rating) : null,
+          review_count: r.review_count !== null && r.review_count !== undefined ? Number(r.review_count) : 0,
+          last_reviewed_at: r.last_reviewed_at,
           images: []
         });
         if (r.primary_image) {
