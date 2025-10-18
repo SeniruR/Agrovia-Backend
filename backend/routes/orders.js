@@ -290,6 +290,151 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
   }
 });
 
+// GET /api/v1/orders/shop/orders (fetch orders that include products from the authenticated shop owner)
+router.get('/shop/orders', authenticate, async (req, res) => {
+  try {
+    const shopOwnerUserId = req.user.id;
+
+    // Find products that belong to shops owned by this user
+    const [productRows] = await db.execute(
+      `SELECT p.id
+       FROM products p
+       INNER JOIN shop_details sd ON sd.id = p.shop_id
+       WHERE sd.user_id = ?`,
+      [shopOwnerUserId]
+    );
+
+    const productIds = productRows.map(r => r.id);
+    if (productIds.length === 0) return res.json({ success: true, data: [] });
+
+    const productPlaceholders = productIds.map(() => '?').join(',');
+
+    // Find order_items that reference these shop products
+    const [matchingItems] = await db.execute(
+      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage, status
+       FROM order_items WHERE productId IN (${productPlaceholders})`,
+      productIds
+    );
+
+    if (matchingItems.length === 0) return res.json({ success: true, data: [] });
+
+    const orderIds = Array.from(new Set(matchingItems.map(i => i.orderId)));
+    const orderPlaceholders = orderIds.map(() => '?').join(',');
+
+    // Fetch orders (include delivery fields)
+    const [orders] = await db.execute(
+      `SELECT id, orderId AS externalOrderId, status, totalAmount, currency, createdAt,
+              deliveryName, deliveryPhone, deliveryAddress, deliveryDistrict
+       FROM orders WHERE id IN (${orderPlaceholders}) ORDER BY createdAt DESC`,
+      orderIds
+    );
+
+    // Fetch transports for the relevant items
+    const itemIds = matchingItems.map(i => i.id);
+    const itemPlaceholders = itemIds.map(() => '?').join(',') || 'NULL';
+    const [transports] = await db.execute(
+      `SELECT ot.*, td.user_id as transporter_user_id, u.full_name as transporter_name, u.phone_number as transporter_phone
+       FROM order_transports ot
+       LEFT JOIN transporter_details td ON td.id = ot.transporter_id
+       LEFT JOIN users u ON td.user_id = u.id
+       WHERE ot.order_item_id IN (${itemPlaceholders})`,
+      itemIds
+    );
+
+    // Build product metadata map (merge crop_posts and products meta for completeness)
+    const productMetaMap = {};
+    if (productIds.length > 0) {
+      // From crop_posts
+      const [cropRows] = await db.execute(
+        `SELECT cp.id, cp.location, cp.district, cp.farmer_id, u.full_name as farmer_name, u.phone_number as farmer_phone
+         FROM crop_posts cp
+         LEFT JOIN users u ON cp.farmer_id = u.id
+         WHERE cp.id IN (${productPlaceholders})`,
+        productIds
+      );
+      for (const row of cropRows) {
+        productMetaMap[row.id] = {
+          ...(productMetaMap[row.id] || {}),
+          location: row.location,
+          district: row.district,
+          farmer_id: row.farmer_id,
+          farmer_name: row.farmer_name,
+          farmer_phone: row.farmer_phone
+        };
+      }
+
+      // From products -> shop_details
+      const [shopRows] = await db.execute(
+        `SELECT p.id, sd.user_id AS shop_owner_id
+         FROM products p
+         LEFT JOIN shop_details sd ON sd.id = p.shop_id
+         WHERE p.id IN (${productPlaceholders})`,
+        productIds
+      );
+      for (const row of shopRows) {
+        productMetaMap[row.id] = {
+          ...(productMetaMap[row.id] || {}),
+          shop_owner_id: row.shop_owner_id
+        };
+      }
+    }
+
+    // Group transports by order_item_id
+    const transportsByItem = {};
+    for (const t of transports || []) {
+      transportsByItem[t.order_item_id] = transportsByItem[t.order_item_id] || [];
+      transportsByItem[t.order_item_id].push(t);
+    }
+
+    const canonicalizeStatus = (s) => {
+      if (!s) return 'pending';
+      const st = String(s).toLowerCase().trim();
+      if (st.includes('collect') || st.includes('assigned') || st.includes('on-the-way') || st.includes('on_the_way')) return 'collecting';
+      if (st.includes('collected')) return 'in-progress';
+      if (st.includes('complete') || st === 'delivered') return 'completed';
+      if (st.includes('in-progress') || st.includes('inprogress') || st.includes('in progress') || st.includes('deliver') || st.includes('in-transit') || st.includes('transit')) return 'in-progress';
+      return 'pending';
+    };
+
+    const itemsWithTransports = matchingItems.map(item => {
+      const itemTransports = transportsByItem[item.id] || [];
+      const primaryTransport = itemTransports && itemTransports.length > 0 ? itemTransports[0] : null;
+      const transportRawStatus = primaryTransport ? (primaryTransport.status || primaryTransport.transport_status || primaryTransport.order_transport_status || primaryTransport.delivery_status || primaryTransport.transporter_status) : null;
+      const finalRaw = item.status || transportRawStatus || null;
+      const finalStatus = canonicalizeStatus(finalRaw);
+      const meta = productMetaMap[item.productId] || {};
+      return {
+        ...item,
+        status: finalStatus,
+        transports: itemTransports,
+        _transport_raw_status: transportRawStatus,
+        productLocation: meta.location || item.location || null,
+        productDistrict: meta.district || null,
+        productFarmerName: item.farmerName || meta.farmer_name || null,
+        productFarmerPhone: meta.farmer_phone || null,
+        productFarmerId: meta.farmer_id || null,
+        productShopOwnerId: meta.shop_owner_id || null
+      };
+    });
+
+    const itemsByOrder = {};
+    itemsWithTransports.forEach(item => {
+      if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = [];
+      itemsByOrder[item.orderId].push(item);
+    });
+
+    const ordersWithProducts = orders.map(order => ({
+      ...order,
+      products: itemsByOrder[order.id] || []
+    }));
+
+    return res.json({ success: true, data: ordersWithProducts });
+  } catch (err) {
+    console.error('Error fetching shop owner orders:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch shop owner orders', error: err.message });
+  }
+});
+
 // PATCH /api/v1/orders/:orderId/items/:itemId/collect
 router.patch('/:orderId/items/:itemId/collect', authenticate, async (req, res) => {
   try {
