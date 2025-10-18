@@ -1,9 +1,10 @@
 require('dotenv').config();
 const express = require('express');
-// const cors = require('cors');
+const cors = require('cors');
 
 const helmet = require('helmet');
 const path = require('path');
+const fs = require('fs');
 const mimeTypes = require('mime-types');
 
 
@@ -25,46 +26,42 @@ const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/adminRoutes');
 
 // Create Express app
-const cors = require('cors');
 const app = express();
-// Enable CORS for frontend dev server
-app.use(cors({
-  origin: 'http://localhost:5174',
-  credentials: true
-}));
+
+// CORS configuration - Allow access from all origins in development
+const corsOptions = {
+  origin: function(origin, callback) {
+    // In development, allow any origin
+    if (process.env.NODE_ENV === 'development' || !origin) {
+      callback(null, true);
+    } else {
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174'
+      ];
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
+};
+
+app.use(cors(corsOptions));
+
+// Explicitly respond to preflight requests
+app.options('*', cors(corsOptions));
+
 const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
-
-
-
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  // allow common custom headers used by the frontend
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
-}));
-
-// Explicitly respond to preflight requests with the same CORS config to ensure
-// Access-Control-Allow-Headers contains our custom header names (some clients
-// require exact matches on preflight responses).
-app.options('*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
-}));
-// CORS configuration
-// app.use(cors({
-//   origin: process.env.NODE_ENV === 'production' 
-//     ? ['https://yourdomain.com'] // Replace with your frontend domain
-//     : ['http://localhost:3000', 'http://localhost:3001'], // React dev server
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
 
 // Rate limiting: in development we skip the general limiter entirely to avoid noisy 429s
 if (process.env.NODE_ENV === 'development') {
@@ -84,8 +81,40 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files (uploaded documents and crop images)
+console.log('Serving static files from:', path.join(__dirname, 'uploads'));
+
+// Create a redirect for files directly under /uploads to /uploads/reviews
+// This handles existing files that are in the reviews subfolder
+app.get('/uploads/:filename', (req, res, next) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+  
+  // Check if the file exists directly in uploads
+  fs.access(filePath, fs.constants.F_OK, (err) => {
+    if (err) {
+      // File doesn't exist in /uploads, try /uploads/reviews
+      const reviewsPath = path.join(__dirname, 'uploads/reviews', filename);
+      fs.access(reviewsPath, fs.constants.F_OK, (reviewErr) => {
+        if (reviewErr) {
+          // File doesn't exist in reviews either
+          console.error(`File not found in either location: ${filename}`);
+          next(); // Continue to next middleware (which will be 404)
+        } else {
+          // File exists in reviews, serve it
+          res.sendFile(reviewsPath);
+        }
+      });
+    } else {
+      // If it exists in uploads, continue to static middleware
+      next();
+    }
+  });
+});
+
+// Regular static file serving
 app.use('/uploads', cors(), express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
+    console.log('Serving file:', filePath);
     res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
   }
 }));
@@ -94,6 +123,14 @@ app.use('/uploads/crop-images', cors(), express.static(path.join(__dirname, 'upl
     res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
   }
 }));
+
+// Serve review attachments specifically
+app.use('/uploads/reviews', cors(), express.static(path.join(__dirname, 'uploads/reviews'), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
+  }
+}));
+
 const shopProductRoutes = require('./routes/shopProductRoutes');
 const shopStatsRoutes = require('./routes/shopStats');
 // Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
@@ -110,6 +147,11 @@ app.use('/api/v1/admin', adminRoutes);
 // Shop reviews routes
 const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
 app.use('/api/v1/shop-reviews', shopReviewsRoutes);
+
+// File upload routes
+const uploadRoutes = require('./routes/uploadRoutes');
+app.use('/api/v1/upload', uploadRoutes);
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -117,6 +159,53 @@ app.get('/', (req, res) => {
     message: 'Welcome to Agrovia API',
     version: '1.0.0',
     documentation: '/api/v1/health'
+  });
+});
+
+// Debug endpoint to check if a file exists
+app.get('/check-file', (req, res) => {
+  const filePath = req.query.path;
+  if (!filePath) {
+    return res.status(400).json({ success: false, message: 'No file path provided' });
+  }
+  
+  // Check both in direct uploads folder and in uploads/reviews
+  const fullPath = path.join(__dirname, filePath);
+  const reviewsPath = filePath.includes('reviews') ? 
+    fullPath : 
+    path.join(__dirname, filePath.replace('uploads', 'uploads/reviews'));
+    
+  console.log('Checking paths:');
+  console.log('1. Direct path:', fullPath);
+  console.log('2. Reviews path:', reviewsPath);
+  
+  // Check both paths
+  const results = { 
+    directPath: { exists: false, path: fullPath },
+    reviewsPath: { exists: false, path: reviewsPath }
+  };
+  
+  // Check direct path
+  fs.access(fullPath, fs.constants.F_OK, (err) => {
+    results.directPath.exists = !err;
+    if (err) {
+      results.directPath.error = err.message;
+    }
+    
+    // Check reviews path
+    fs.access(reviewsPath, fs.constants.F_OK, (reviewErr) => {
+      results.reviewsPath.exists = !reviewErr;
+      if (reviewErr) {
+        results.reviewsPath.error = reviewErr.message;
+      }
+      
+      // Return all results
+      res.json({ 
+        success: results.directPath.exists || results.reviewsPath.exists,
+        message: `File check results for: ${filePath}`,
+        results: results
+      });
+    });
   });
 });
 
@@ -157,9 +246,22 @@ process.on('unhandledRejection', (err, promise) => {
   process.exit(1);
 });
 
-// Handle uncaught exceptions
+// Handle uncaught exceptions with more detailed error handling
 process.on('uncaughtException', (err) => {
+  // Check for common file-type module errors
+  if (err.message && (
+    err.message.includes('file-type') || 
+    err.message.includes('fromBuffer') ||
+    err.message.includes('Unsupported file type')
+  )) {
+    console.error('Uncaught Exception in file detection:', err.message);
+    console.log('This is likely related to image processing. The server will continue running.');
+    // Don't exit for file-type related errors
+    return;
+  }
+  
   console.error('Uncaught Exception:', err.message);
+  console.error(err.stack);
   process.exit(1);
 });
 
