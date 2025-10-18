@@ -1,41 +1,7 @@
 const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer');
-const { v4: uuidv4 } = require('uuid');
 const FileType = require('file-type');
-
-// Setup multer for file uploads
-const storage = multer.diskStorage({
-  destination: function(req, file, cb) {
-    const uploadDir = path.join(__dirname, '../uploads/reviews');
-    // Create directory if it doesn't exist
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: function(req, file, cb) {
-    // Generate unique filename
-    const uniqueFileName = `${uuidv4()}-${file.originalname}`;
-    cb(null, uniqueFileName);
-  }
-});
-
-// Configure multer with file size limits and accepted file types
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  },
-  fileFilter: function(req, file, cb) {
-    // Accept only image files
-    if (!file.mimetype.startsWith('image/')) {
-      return cb(new Error('Only image files are allowed!'), false);
-    }
-    cb(null, true);
-  }
-}).array('attachments', 5); // Allow up to 5 files with field name 'attachments'
 
 /**
  * Get all reviews for a specific crop
@@ -93,19 +59,52 @@ exports.getReviewsByCropId = async (req, res) => {
     console.log("Query result:", reviews);
     
     // Process the reviews to add attachment URLs if they exist
-    const reviewsWithAttachmentUrls = reviews.map(review => {
+    const reviewsWithAttachmentUrls = reviews.map((review) => {
       let attachmentUrls = [];
-      
+      let attachmentBlobs = [];
+
       if (review.attachments) {
         try {
-          // If attachments field contains JSON string of URLs
-          attachmentUrls = JSON.parse(review.attachments);
-        } catch (e) {
-          // If not a JSON string (e.g., a direct file path or blob)
+          const parsed = JSON.parse(review.attachments);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            attachmentUrls = parsed.map((item, index) =>
+              `/api/v1/crop-reviews/${review.id}/attachment?file=${encodeURIComponent(item.filename || `attachment-${index + 1}`)}`
+            );
+
+            attachmentBlobs = parsed
+              .map((item, index) => {
+                if (item && typeof item === 'object') {
+                  const filename = item.filename || `attachment-${index + 1}`;
+                  const mimetype = item.mimetype || 'application/octet-stream';
+                  if (typeof item.data === 'string' && item.data.trim()) {
+                    return {
+                      filename,
+                      mimetype,
+                      size: item.size ?? null,
+                      data: item.data
+                    };
+                  }
+                }
+                if (typeof item === 'string') {
+                  const trimmed = item.trim();
+                  if (trimmed.startsWith('data:')) {
+                    return {
+                      filename: `attachment-${index + 1}`,
+                      mimetype: trimmed.substring(5, trimmed.indexOf(';')) || 'application/octet-stream',
+                      size: null,
+                      data: trimmed
+                    };
+                  }
+                }
+                return null;
+              })
+              .filter(Boolean);
+          }
+        } catch (err) {
           attachmentUrls = [`/api/v1/crop-reviews/${review.id}/attachment`];
         }
       }
-      
+
       return {
         id: review.id,
         crop_id: review.crop_id,
@@ -114,7 +113,8 @@ exports.getReviewsByCropId = async (req, res) => {
         rating: review.rating,
         comment: review.comment,
         created_at: review.created_at,
-        attachment_urls: attachmentUrls
+        attachment_urls: attachmentUrls,
+        attachment_blobs: attachmentBlobs
       };
     });
     
@@ -186,17 +186,28 @@ exports.addReview = async (req, res) => {
         });
       }
       
-      // Process uploaded files
-      let attachmentUrls = [];
-      
-      if (req.files && req.files.length > 0) {
-        // Store paths to files
-        for (const file of req.files) {
-          const relativePath = `/uploads/reviews/${path.basename(file.path)}`;
-          attachmentUrls.push(relativePath);
+      let attachmentPayload = null;
+
+      if (req.files && req.files.length > 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Only one attachment is allowed per review.'
+        });
+      }
+
+      if (req.files && req.files.length === 1) {
+        const file = req.files[0];
+        if (Buffer.isBuffer(file.buffer)) {
+          const prepared = {
+            filename: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            data: file.buffer.toString('base64')
+          };
+          attachmentPayload = JSON.stringify([prepared]);
         }
       }
-      
+
       // Create the review record
       const insertQuery = `
         INSERT INTO crop_reviews (crop_id, buyer_id, rating, comment, attachments, created_at)
@@ -208,7 +219,7 @@ exports.addReview = async (req, res) => {
         buyer_id, 
         rating, 
         comment, 
-        attachmentUrls.length > 0 ? JSON.stringify(attachmentUrls) : null
+        attachmentPayload
       ];
       
       console.log('Executing insert query with params:', insertParams);
@@ -216,6 +227,40 @@ exports.addReview = async (req, res) => {
       const [result] = await connection.execute(insertQuery, insertParams);
       const reviewId = result.insertId;
       
+      let attachmentBlobs = [];
+
+      if (attachmentPayload) {
+        try {
+          const parsed = JSON.parse(attachmentPayload);
+          attachmentBlobs = parsed
+            .map((item, index) => {
+              if (item && typeof item === 'object' && typeof item.data === 'string' && item.data.trim()) {
+                return {
+                  filename: item.filename || `attachment-${index + 1}`,
+                  mimetype: item.mimetype || 'application/octet-stream',
+                  size: item.size ?? null,
+                  data: item.data
+                };
+              }
+              if (typeof item === 'string') {
+                const trimmed = item.trim();
+                if (trimmed.startsWith('data:')) {
+                  return {
+                    filename: `attachment-${index + 1}`,
+                    mimetype: trimmed.substring(5, trimmed.indexOf(';')) || 'application/octet-stream',
+                    size: null,
+                    data: trimmed
+                  };
+                }
+              }
+              return null;
+            })
+            .filter(Boolean);
+        } catch (parseErr) {
+          console.warn('Failed to parse attachment payload for response preview:', parseErr);
+        }
+      }
+
       // Commit the transaction
       await connection.commit();
       
@@ -230,7 +275,8 @@ exports.addReview = async (req, res) => {
           buyer_id,
           rating,
           comment,
-          attachment_urls: attachmentUrls
+          attachment_urls: attachmentPayload ? [`/api/v1/crop-reviews/${reviewId}/attachment`] : [],
+          attachment_blobs: attachmentBlobs
         }
       });
   } catch (error) {
@@ -290,12 +336,45 @@ exports.getReviewById = async (req, res) => {
     
     // Process attachments
     let attachmentUrls = [];
+    let attachmentBlobs = [];
     if (review.attachments) {
       try {
-        // If attachments field contains JSON string of URLs
-        attachmentUrls = JSON.parse(review.attachments);
-      } catch (e) {
-        // If not a JSON string (e.g., a direct file path or blob)
+        const parsed = JSON.parse(review.attachments);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          attachmentUrls = parsed.map((item, index) =>
+            `/api/v1/crop-reviews/${review.id}/attachment?file=${encodeURIComponent(item.filename || `attachment-${index + 1}`)}`
+          );
+
+          attachmentBlobs = parsed
+            .map((item, index) => {
+              if (item && typeof item === 'object') {
+                const filename = item.filename || `attachment-${index + 1}`;
+                const mimetype = item.mimetype || 'application/octet-stream';
+                if (typeof item.data === 'string' && item.data.trim()) {
+                  return {
+                    filename,
+                    mimetype,
+                    size: item.size ?? null,
+                    data: item.data
+                  };
+                }
+              }
+              if (typeof item === 'string') {
+                const trimmed = item.trim();
+                if (trimmed.startsWith('data:')) {
+                  return {
+                    filename: `attachment-${index + 1}`,
+                    mimetype: trimmed.substring(5, trimmed.indexOf(';')) || 'application/octet-stream',
+                    size: null,
+                    data: trimmed
+                  };
+                }
+              }
+              return null;
+            })
+            .filter(Boolean);
+        }
+      } catch (err) {
         attachmentUrls = [`/api/v1/crop-reviews/${review.id}/attachment`];
       }
     }
@@ -310,7 +389,8 @@ exports.getReviewById = async (req, res) => {
         rating: review.rating,
         comment: review.comment,
         created_at: review.created_at,
-        attachment_urls: attachmentUrls
+        attachment_urls: attachmentUrls,
+        attachment_blobs: attachmentBlobs
       }
     });
   } catch (error) {
@@ -332,63 +412,117 @@ exports.getReviewById = async (req, res) => {
  */
 exports.getReviewAttachment = async (req, res) => {
   let connection;
-  console.log(`[CONTROLLER] Getting attachment for review ID: ${req.params.reviewId}`);
-  
   try {
     const { reviewId } = req.params;
-    
-    // Get database connection
+    const { file: requestedFile } = req.query;
+
     connection = await db.getConnection();
-    
-    // Query to get the attachment binary data from the database
+
     const query = `
       SELECT attachments
       FROM crop_reviews
       WHERE id = ?
     `;
-    
-    const [reviews] = await connection.execute(query, [reviewId]);
-    
-    if (reviews.length === 0 || !reviews[0].attachments) {
-      console.log(`No review found or no attachment for review ID: ${reviewId}`);
+
+    const [rows] = await connection.execute(query, [reviewId]);
+
+    if (rows.length === 0 || !rows[0].attachments) {
       return res.status(404).json({
         success: false,
         message: `Review ${reviewId} not found or has no attachment`
       });
     }
-    
-    const attachmentData = reviews[0].attachments;
-    
-    // Check if attachment is stored as JSON string (array of URLs)
-    try {
-      const parsed = JSON.parse(attachmentData);
-      if (Array.isArray(parsed)) {
-        console.log(`Found JSON array of URLs, redirecting to: ${parsed[0]}`);
-        return res.redirect(parsed[0]);
+
+    const raw = rows[0].attachments;
+    const asString = Buffer.isBuffer(raw) ? raw.toString('utf8') : raw;
+    let attachments = [];
+
+    if (typeof asString === 'string') {
+      try {
+        const parsed = JSON.parse(asString);
+        if (Array.isArray(parsed)) {
+          attachments = parsed;
+        }
+      } catch (err) {
+        // Might be JSON array of plain strings (legacy file paths)
+        if (asString.trim().startsWith('[')) {
+          try {
+            const fallback = JSON.parse(asString.replace(/'/g, '"'));
+            if (Array.isArray(fallback)) {
+              attachments = fallback.map((entry) => ({ path: entry }));
+            }
+          } catch (_) {
+            attachments = [{ data: raw.toString('base64'), filename: requestedFile || 'attachment' }];
+          }
+        } else {
+          attachments = [{ data: raw.toString('base64'), filename: requestedFile || 'attachment' }];
+        }
       }
-    } catch (e) {
-      // Not JSON, should be binary data
-      console.log('Attachment is binary data, proceeding...');
+    } else if (Buffer.isBuffer(raw)) {
+      attachments = [{ data: raw.toString('base64'), filename: requestedFile || 'attachment' }];
     }
-    
-    // Detect MIME type using file-type
-    try {
-      const fileType = await FileType.fromBuffer(attachmentData);
-      
-      if (fileType) {
-        console.log(`Detected file type: ${fileType.mime}`);
-        res.setHeader('Content-Type', fileType.mime);
-      } else {
-        console.log('Could not detect file type, using default');
-        res.setHeader('Content-Type', 'application/octet-stream');
+
+    if (attachments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `Attachment not found`
+      });
+    }
+
+    let target = attachments[0];
+
+    if (requestedFile) {
+      target = attachments.find((entry) => entry && entry.filename === requestedFile) || attachments[0];
+    }
+
+    // Legacy path support (string path stored instead of blob)
+    if (target && target.path) {
+      const absolutePath = path.isAbsolute(target.path)
+        ? target.path
+        : path.join(__dirname, '..', target.path.replace(/^\/+/, ''));
+
+      if (!fs.existsSync(absolutePath)) {
+        return res.status(404).json({
+          success: false,
+          message: 'Attachment file not found on server'
+        });
       }
-    } catch (err) {
-      console.error('Error detecting file type:', err);
-      res.setHeader('Content-Type', 'application/octet-stream');
+
+  const detectionStream = fs.createReadStream(absolutePath);
+  const mimeType = (await FileType.fromStream(detectionStream)) || { mime: 'application/octet-stream' };
+  detectionStream.destroy();
+
+  res.setHeader('Content-Type', mimeType.mime);
+      res.setHeader('Content-Disposition', `inline; filename="${path.basename(absolutePath)}"`);
+
+      // Need fresh stream because file-type consumed some bytes
+      fs.createReadStream(absolutePath).pipe(res);
+      return;
     }
-    
-    // Send the binary data as response
-    return res.send(attachmentData);
+
+    if (!target || !target.data) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment data not available'
+      });
+    }
+
+    const buffer = Buffer.from(target.data, 'base64');
+    let mime = target.mimetype;
+
+    if (!mime) {
+      const detected = await FileType.fromBuffer(buffer);
+      mime = detected?.mime || 'application/octet-stream';
+    }
+
+    if (target.filename) {
+      res.setHeader('Content-Disposition', `inline; filename="${target.filename.replace(/"/g, '')}"`);
+    }
+
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Length', buffer.length);
+
+    return res.send(buffer);
   } catch (error) {
     console.error('Error serving attachment:', error);
     return res.status(500).json({
@@ -450,9 +584,27 @@ exports.updateReview = async (req, res) => {
     let updateFields = '';
     let updateParams = [];
     
-    if (req.files && req.files.length > 0 && req.files[0].buffer) {
-      // Store the file binary data
-      attachmentData = req.files[0].buffer;
+    if (req.files && req.files.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only one attachment is allowed per review.'
+      });
+    }
+
+    if (req.files && req.files.length === 1) {
+      const file = req.files[0];
+      if (Buffer.isBuffer(file.buffer)) {
+        const payload = {
+          filename: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+          data: file.buffer.toString('base64')
+        };
+        attachmentData = JSON.stringify([payload]);
+      }
+    }
+
+    if (attachmentData) {
       updateFields = 'rating = ?, comment = ?, attachments = ?, updated_at = NOW()';
       updateParams = [rating, comment, attachmentData, reviewId];
     } else {
@@ -467,6 +619,83 @@ exports.updateReview = async (req, res) => {
       updateParams
     );
     
+    let responseAttachments = [];
+    let responseAttachmentBlobs = [];
+
+    if (attachmentData) {
+      try {
+        const parsed = JSON.parse(attachmentData);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          responseAttachments = parsed.map((item, index) =>
+            `/api/v1/crop-reviews/${reviewId}/attachment?file=${encodeURIComponent(item.filename || `attachment-${index + 1}`)}`
+          );
+
+          responseAttachmentBlobs = parsed
+            .map((item, index) => {
+              if (item && typeof item === 'object' && typeof item.data === 'string' && item.data.trim()) {
+                return {
+                  filename: item.filename || `attachment-${index + 1}`,
+                  mimetype: item.mimetype || 'application/octet-stream',
+                  size: item.size ?? null,
+                  data: item.data
+                };
+              }
+              if (typeof item === 'string') {
+                const trimmed = item.trim();
+                if (trimmed.startsWith('data:')) {
+                  return {
+                    filename: `attachment-${index + 1}`,
+                    mimetype: trimmed.substring(5, trimmed.indexOf(';')) || 'application/octet-stream',
+                    size: null,
+                    data: trimmed
+                  };
+                }
+              }
+              return null;
+            })
+            .filter(Boolean);
+        }
+      } catch (err) {
+        responseAttachments = [`/api/v1/crop-reviews/${reviewId}/attachment`];
+      }
+    } else if (reviews[0].attachments) {
+      try {
+        const parsedOriginal = JSON.parse(reviews[0].attachments);
+        if (Array.isArray(parsedOriginal) && parsedOriginal.length > 0) {
+          responseAttachments = parsedOriginal.map((item, index) =>
+            `/api/v1/crop-reviews/${reviewId}/attachment?file=${encodeURIComponent(item.filename || `attachment-${index + 1}`)}`
+          );
+
+          responseAttachmentBlobs = parsedOriginal
+            .map((item, index) => {
+              if (item && typeof item === 'object' && typeof item.data === 'string' && item.data.trim()) {
+                return {
+                  filename: item.filename || `attachment-${index + 1}`,
+                  mimetype: item.mimetype || 'application/octet-stream',
+                  size: item.size ?? null,
+                  data: item.data
+                };
+              }
+              if (typeof item === 'string') {
+                const trimmed = item.trim();
+                if (trimmed.startsWith('data:')) {
+                  return {
+                    filename: `attachment-${index + 1}`,
+                    mimetype: trimmed.substring(5, trimmed.indexOf(';')) || 'application/octet-stream',
+                    size: null,
+                    data: trimmed
+                  };
+                }
+              }
+              return null;
+            })
+            .filter(Boolean);
+        }
+      } catch (err) {
+        responseAttachments = [`/api/v1/crop-reviews/${reviewId}/attachment`];
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Review updated successfully',
@@ -474,7 +703,8 @@ exports.updateReview = async (req, res) => {
         id: reviewId,
         rating,
         comment,
-        attachment_urls: [`/api/v1/crop-reviews/${reviewId}/attachment`]
+        attachment_urls: responseAttachments,
+        attachment_blobs: responseAttachmentBlobs
       }
     });
   } catch (error) {

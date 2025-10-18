@@ -4,34 +4,93 @@ class ShopReviews {
     // Helper method to process attachments before storing in the database
     static processAttachments(attachments) {
         if (!attachments) return null;
-        
-        try {
-            // If it's already a string, check if it's JSON
-            if (typeof attachments === 'string') {
-                // If it looks like JSON, parse it and then stringify it to ensure it's valid
-                if (attachments.trim().startsWith('[') || attachments.trim().startsWith('{')) {
-                    const parsed = JSON.parse(attachments);
-                    return JSON.stringify(parsed);
-                }
-                // If it's a comma-separated list, convert to array and stringify
-                else if (attachments.includes(',')) {
-                    const array = attachments.split(',').map(item => item.trim()).filter(Boolean);
-                    return JSON.stringify(array);
-                }
-                // Single value, make it an array
-                else if (attachments.trim()) {
-                    return JSON.stringify([attachments.trim()]);
-                }
+
+        const pack = (normalized) => {
+            if (!normalized || !normalized.length) return null;
+            try {
+                const json = JSON.stringify(normalized);
+                if (!json || !json.length) return null;
+                return Buffer.from(json, 'utf8');
+            } catch (error) {
+                console.error('Error stringifying attachments:', error);
                 return null;
             }
-            
-            // If it's an array, stringify it
-            if (Array.isArray(attachments)) {
-                return JSON.stringify(attachments.filter(Boolean));
+        };
+
+        const normalizeEntry = (entry, index = 0) => {
+            if (!entry) return null;
+
+            if (typeof entry === 'string') {
+                const trimmed = entry.trim();
+                if (!trimmed) return null;
+                return {
+                    filename: trimmed.split('/').pop(),
+                    mimetype: null,
+                    size: null,
+                    data: null,
+                    legacyPath: trimmed
+                };
             }
-            
-            // If it's an object, stringify it
-            return JSON.stringify(attachments);
+
+            if (typeof entry === 'object') {
+                const filename = entry.filename || entry.name || `attachment-${index + 1}`;
+                const mimetype = entry.mimetype || entry.type || 'image/jpeg';
+                const size = entry.size ?? null;
+                let data = entry.data || entry.base64 || entry.base64Data || entry.attachmentData || null;
+
+                if (typeof data === 'string') {
+                    const trimmedData = data.trim();
+                    data = trimmedData.startsWith('data:') ? trimmedData.split(',').pop() : trimmedData;
+                } else {
+                    data = null;
+                }
+
+                const legacyPath = entry.path || entry.filepath || entry.url || entry.Location || entry.location || null;
+
+                return {
+                    filename,
+                    mimetype,
+                    size,
+                    data,
+                    legacyPath
+                };
+            }
+
+            return null;
+        };
+
+        try {
+            if (Buffer.isBuffer(attachments)) {
+                const asString = attachments.toString('utf8');
+                if (!asString.trim()) return null;
+                const parsed = JSON.parse(asString);
+                const normalized = Array.isArray(parsed)
+                    ? parsed.map((entry, idx) => normalizeEntry(entry, idx)).filter(Boolean)
+                    : [];
+                return pack(normalized);
+            }
+
+            if (typeof attachments === 'string') {
+                if (!attachments.trim()) return null;
+                if (attachments.trim().startsWith('[') || attachments.trim().startsWith('{')) {
+                    const parsed = JSON.parse(attachments);
+                    const normalized = Array.isArray(parsed) ? parsed.map((entry, idx) => normalizeEntry(entry, idx)).filter(Boolean) : [];
+                    return pack(normalized);
+                }
+                return pack([normalizeEntry(attachments, 0)].filter(Boolean));
+            }
+
+            if (Array.isArray(attachments)) {
+                const normalized = attachments.map((entry, idx) => normalizeEntry(entry, idx)).filter(Boolean);
+                return pack(normalized);
+            }
+
+            if (typeof attachments === 'object') {
+                const normalized = normalizeEntry(attachments, 0);
+                return normalized ? pack([normalized]) : null;
+            }
+
+            return null;
         } catch (error) {
             console.error('Error processing attachments:', error);
             return null;
@@ -80,35 +139,116 @@ class ShopReviews {
         `;
         
         const [reviews] = await pool.execute(query, [shop_id]);
-        
-        // Process each review to handle attachments
-        return reviews.map(review => {
-            if (review.attachments) {
+
+        const parseStoredAttachments = (raw) => {
+            if (!raw) return [];
+
+            let working = raw;
+
+            if (Buffer.isBuffer(raw)) {
                 try {
-                    // Try to parse the JSON attachments
-                    const parsedAttachments = JSON.parse(review.attachments);
-                    review.attachments = parsedAttachments;
-                    
-                    // Add URLs for each attachment
-                    if (Array.isArray(parsedAttachments)) {
-                        review.attachment_urls = parsedAttachments.map(filename => {
-                            // If it already has a full path or URL, use it
-                            if (typeof filename === 'string' && (filename.startsWith('http') || filename.startsWith('/uploads/'))) {
-                                return filename;
-                            }
-                            // Otherwise construct the URL
-                            return `/uploads/${filename}`;
-                        });
-                    }
+                    working = raw.toString('utf8');
                 } catch (error) {
-                    console.error(`Error parsing attachments for review ${review.id}:`, error);
-                    review.attachments = [];
-                    review.attachment_urls = [];
+                    console.error('Error decoding attachment buffer:', error);
+                    return [];
                 }
-            } else {
-                review.attachments = [];
-                review.attachment_urls = [];
             }
+
+            try {
+                let parsed;
+
+                if (typeof working === 'string') {
+                    const trimmed = working.trim();
+                    if (!trimmed) return [];
+
+                    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+                        parsed = JSON.parse(trimmed);
+                    } else if (trimmed.includes(',')) {
+                        parsed = trimmed.split(',').map((part) => part.trim()).filter(Boolean);
+                    } else {
+                        parsed = [trimmed];
+                    }
+                } else if (Array.isArray(working)) {
+                    parsed = working;
+                } else {
+                    return [];
+                }
+
+                if (!Array.isArray(parsed)) return [];
+
+                return parsed
+                    .map((entry, idx) => {
+                        if (!entry) return null;
+                        if (typeof entry === 'string') {
+                            const trimmed = entry.trim();
+                            if (!trimmed) return null;
+                            const filename = trimmed.split('/').pop();
+                            const legacyPath = trimmed.startsWith('http') || trimmed.startsWith('/') ? trimmed : `/uploads/${trimmed}`;
+                            return {
+                                filename,
+                                mimetype: null,
+                                size: null,
+                                data: null,
+                                legacyPath
+                            };
+                        }
+
+                        const filename = entry.filename || entry.name || `attachment-${idx + 1}`;
+                        const mimetype = entry.mimetype || 'image/jpeg';
+                        const size = entry.size ?? null;
+                        let data = entry.data || entry.base64 || entry.base64Data || null;
+
+                        if (typeof data === 'string') {
+                            const trimmedData = data.trim();
+                            data = trimmedData.startsWith('data:') ? trimmedData.split(',').pop() : trimmedData;
+                        } else {
+                            data = null;
+                        }
+
+                        const legacyPath = entry.legacyPath || entry.path || entry.url || entry.Location || entry.location || null;
+
+                        return {
+                            filename,
+                            mimetype,
+                            size,
+                            data,
+                            legacyPath
+                        };
+                    })
+                    .filter(Boolean);
+            } catch (error) {
+                console.error('Error parsing stored attachments:', error);
+                return [];
+            }
+        };
+
+        return reviews.map((review) => {
+            const attachments = parseStoredAttachments(review.attachments);
+
+            review.attachments = attachments;
+            review.attachment_urls = attachments.map((attachment) => {
+                if (attachment.data) {
+                    const mime = attachment.mimetype || 'application/octet-stream';
+                    return `data:${mime};base64,${attachment.data}`;
+                }
+
+                if (attachment.legacyPath) {
+                    if (attachment.legacyPath.startsWith('http') || attachment.legacyPath.startsWith('data:')) {
+                        return attachment.legacyPath;
+                    }
+                    if (attachment.legacyPath.startsWith('/')) {
+                        return attachment.legacyPath;
+                    }
+                    return `/uploads/${attachment.legacyPath}`;
+                }
+
+                if (attachment.filename) {
+                    return `/uploads/${attachment.filename}`;
+                }
+
+                return '';
+            }).filter(Boolean);
+
             return review;
         });
     }
