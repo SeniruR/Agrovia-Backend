@@ -49,6 +49,8 @@ const formatArticleRow = (row, options = {}) => {
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		requestedBy: row.requested_by != null ? Number(row.requested_by) : null,
+		requestedByName: row.requested_by_name || null,
+		requestedByEmail: row.requested_by_email || null,
 		coverImage: formatCoverImage(row, includeCoverBinary),
 		supportingImages: includeSupportImages
 			? supportingRows.map((imageRow) => formatSupportingImage(imageRow, includeCoverBinary))
@@ -118,17 +120,19 @@ class CreateArticleModel {
 	static async getAllArticles(options = {}) {
 		const { requestedBy = null } = options;
 
-		let query = `SELECT article_id, title, description, status, created_at, updated_at,
-						cover_image_blob, cover_image_mime_type, cover_image_filename, requested_by
-				 FROM knowledge_article`;
+		let query = `SELECT ka.article_id, ka.title, ka.description, ka.status, ka.created_at, ka.updated_at,
+					ka.cover_image_blob, ka.cover_image_mime_type, ka.cover_image_filename,
+					ka.requested_by, u.full_name AS requested_by_name, u.email AS requested_by_email
+			 FROM knowledge_article ka
+			 LEFT JOIN users u ON u.id = ka.requested_by`;
 		const params = [];
 
 		if (requestedBy) {
-			query += ' WHERE requested_by = ?';
+			query += ' WHERE ka.requested_by = ?';
 			params.push(requestedBy);
 		}
 
-		query += ' ORDER BY created_at DESC';
+		query += ' ORDER BY ka.created_at DESC';
 
 		const [rows] = await pool.query(query, params);
 
@@ -170,10 +174,12 @@ class CreateArticleModel {
 
 	static async getArticleById(articleId) {
 		const [[articleRow]] = await pool.query(
-			`SELECT article_id, title, description, status, created_at, updated_at,
-						cover_image_blob, cover_image_mime_type, cover_image_filename, requested_by
-				 FROM knowledge_article
-			WHERE article_id = ?
+			`SELECT ka.article_id, ka.title, ka.description, ka.status, ka.created_at, ka.updated_at,
+					ka.cover_image_blob, ka.cover_image_mime_type, ka.cover_image_filename,
+					ka.requested_by, u.full_name AS requested_by_name, u.email AS requested_by_email
+				 FROM knowledge_article ka
+				 LEFT JOIN users u ON u.id = ka.requested_by
+			WHERE ka.article_id = ?
 			LIMIT 1`,
 			[articleId],
 		);

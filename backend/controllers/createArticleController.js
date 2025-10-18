@@ -1,6 +1,6 @@
 const CreateArticleModel = require('../models/CreateArticleModel');
 
-const ALLOWED_STATUSES = new Set(['draft', 'pending', 'published', 'archived']);
+const ALLOWED_STATUSES = new Set(['draft', 'pending', 'published', 'archived', 'rejected']);
 
 const buildCoverImagePayload = (file) => {
 	if (!file) return null;
@@ -148,6 +148,13 @@ exports.updateArticle = async (req, res) => {
 					}
 				}
 			}
+		}
+
+		if (status && ['published', 'rejected'].includes(status) && !['main_moderator', 'admin'].includes(req.user?.role)) {
+			return res.status(403).json({
+				success: false,
+				message: 'Only main moderators or administrators can approve or reject article requests.',
+			});
 		}
 
 		const updated = await CreateArticleModel.updateArticle(articleId, {

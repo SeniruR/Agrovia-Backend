@@ -55,26 +55,6 @@ const createTables = async (connection) => {
     `);
 
 
-    // Users table (no organization_committee_number, no foreign key)
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        full_name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        phone_number VARCHAR(20) NOT NULL,
-        district VARCHAR(100) NOT NULL,
-        nic VARCHAR(20) UNIQUE NOT NULL,
-        address VARCHAR(500),
-        profile_image VARCHAR(500),
-        user_type INT NOT NULL,
-        is_verified BOOLEAN DEFAULT FALSE,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      )
-    `);
-
     // Farmer details table (organization_committee_number foreign key here)
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS farmer_details (
@@ -261,8 +241,8 @@ const createTables = async (connection) => {
         article_id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
-        status ENUM('draft', 'pending', 'published', 'archived') NOT NULL DEFAULT 'draft',
-        requested_by INT NULL,
+        status ENUM('draft', 'pending', 'published', 'archived', 'rejected') NOT NULL DEFAULT 'draft',
+        requested_by BIGINT UNSIGNED NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         cover_image_blob LONGBLOB,
@@ -274,12 +254,22 @@ const createTables = async (connection) => {
       )
     `);
 
+    const [knowledgeArticleStatusColumn] = await connection.query(`SHOW COLUMNS FROM knowledge_article LIKE 'status'`);
+    if (knowledgeArticleStatusColumn?.length && !knowledgeArticleStatusColumn[0].Type.includes('rejected')) {
+      await connection.execute(`ALTER TABLE knowledge_article MODIFY COLUMN status ENUM('draft', 'pending', 'published', 'archived', 'rejected') NOT NULL DEFAULT 'draft'`);
+    }
+
     const [requestedByColumn] = await connection.query(`SHOW COLUMNS FROM knowledge_article LIKE 'requested_by'`);
     if (!requestedByColumn?.length) {
-      await connection.execute(`ALTER TABLE knowledge_article ADD COLUMN requested_by INT NULL AFTER status`);
+      await connection.execute(`ALTER TABLE knowledge_article ADD COLUMN requested_by BIGINT UNSIGNED NULL AFTER status`);
       await connection.execute(`ALTER TABLE knowledge_article ADD INDEX idx_requested_by (requested_by)`);
       await connection.execute(`ALTER TABLE knowledge_article ADD CONSTRAINT fk_knowledge_article_requested_by FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL`);
     } else {
+      const columnType = (requestedByColumn[0]?.Type || '').toLowerCase();
+      if (!columnType.startsWith('bigint') || !columnType.includes('unsigned')) {
+        await connection.execute(`ALTER TABLE knowledge_article MODIFY COLUMN requested_by BIGINT UNSIGNED NULL`);
+      }
+
       const [requestedByIndex] = await connection.query(`SHOW INDEX FROM knowledge_article WHERE Key_name = 'idx_requested_by'`);
       if (!requestedByIndex?.length) {
         try {
