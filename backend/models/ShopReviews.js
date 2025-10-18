@@ -120,8 +120,15 @@ class ShopReviews {
         
         for (const field of allowedFields) {
             if (updateData[field] !== undefined) {
-                updates.push(`${field} = ?`);
-                values.push(updateData[field]);
+                if (field === 'attachments') {
+                    // Ensure attachments are stored as JSON (array or null)
+                    const processed = this.processAttachments(updateData[field]);
+                    updates.push(`${field} = ?`);
+                    values.push(processed);
+                } else {
+                    updates.push(`${field} = ?`);
+                    values.push(updateData[field]);
+                }
             }
         }
         
