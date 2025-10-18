@@ -23,7 +23,7 @@ exports.getAllPestAlerts = async (req, res) => {
     // Get all pest alerts with their recommendations and author information
     const [alerts] = await pool.execute(`
       SELECT pa.*,
-             u.name as authorName,
+             u.full_name as authorName,
              u.email as authorEmail,
              GROUP_CONCAT(pr.recommendation SEPARATOR '|||') as recommendations
       FROM PestAlerts pa
