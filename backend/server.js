@@ -4,6 +4,7 @@ const cors = require('cors');
 
 const helmet = require('helmet');
 const path = require('path');
+const fs = require('fs');
 const mimeTypes = require('mime-types');
 
 
