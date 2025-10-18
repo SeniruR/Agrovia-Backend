@@ -26,19 +26,21 @@ class CropChat {
     // ✅ LIMIT must be directly inlined (MySQL doesn't support LIMIT ? in prepared statements)
     const query = `
       SELECT
-        id,
-        crop_id,
-        farmer_id,
-        buyer_id,
-        sender_id,
-        message,
-        client_message_id,
-        created_at
-      FROM crop_chats
-      WHERE crop_id = ?
-        AND farmer_id = ?
-        AND buyer_id = ?
-      ORDER BY created_at ASC, id ASC
+        cc.id,
+        cc.crop_id,
+        cc.farmer_id,
+        cc.buyer_id,
+        cc.sender_id,
+        cc.message,
+        cc.client_message_id,
+        cc.created_at,
+        u.full_name as sender_name
+      FROM crop_chats cc
+      LEFT JOIN users u ON cc.sender_id = u.id
+      WHERE cc.crop_id = ?
+        AND cc.farmer_id = ?
+        AND cc.buyer_id = ?
+      ORDER BY cc.created_at ASC, cc.id ASC
       LIMIT ${safeLimit}
     `;
 
@@ -89,10 +91,12 @@ class CropChat {
     const [rows] = await pool.execute(
       `
       SELECT 
-        id, crop_id, farmer_id, buyer_id, sender_id, 
-        message, client_message_id, created_at 
-      FROM crop_chats 
-      WHERE id = ?
+        cc.id, cc.crop_id, cc.farmer_id, cc.buyer_id, cc.sender_id, 
+        cc.message, cc.client_message_id, cc.created_at,
+        u.full_name as sender_name
+      FROM crop_chats cc
+      LEFT JOIN users u ON cc.sender_id = u.id
+      WHERE cc.id = ?
       `,
       [result.insertId]
     );
@@ -202,6 +206,44 @@ class CropChat {
       lastMessageTime: chat.lastMessageTime,
       formattedTime: chat.lastMessageTime ? new Date(chat.lastMessageTime).toLocaleString() : null
     }));
+  }
+
+  // Delete a chat message
+  static async deleteMessage(messageId, userId) {
+    // Convert messageId to integer
+    const numericMessageId = Number.parseInt(messageId, 10);
+    const numericUserId = Number.parseInt(userId, 10);
+
+    // Validate identifiers
+    if (Number.isNaN(numericMessageId) || Number.isNaN(numericUserId)) {
+      throw new Error('Invalid message ID or user ID supplied for message deletion.');
+    }
+
+    // First, check if the message exists and belongs to the user
+    const checkQuery = `
+      SELECT id, sender_id FROM crop_chats 
+      WHERE id = ? AND sender_id = ?
+    `;
+
+    const [existingMessage] = await pool.execute(checkQuery, [numericMessageId, numericUserId]);
+
+    if (!existingMessage || existingMessage.length === 0) {
+      throw new Error('Message not found or you do not have permission to delete this message.');
+    }
+
+    // Delete the message
+    const deleteQuery = `
+      DELETE FROM crop_chats 
+      WHERE id = ? AND sender_id = ?
+    `;
+
+    const [result] = await pool.execute(deleteQuery, [numericMessageId, numericUserId]);
+
+    if (result.affectedRows === 0) {
+      throw new Error('Failed to delete the message.');
+    }
+
+    return { success: true, messageId: numericMessageId };
   }
 }
 

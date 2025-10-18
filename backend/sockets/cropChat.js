@@ -121,5 +121,27 @@ module.exports = (io) => {
         socket.emit('cropChatError', 'Unable to send message right now.');
       }
     });
+
+    socket.on('deleteCropChatMessage', async ({ messageId }) => {
+      try {
+        if (!messageId) {
+          return socket.emit('cropChatError', 'Message ID is required for deletion.');
+        }
+
+        const userId = socket.data.user.id;
+
+        // Delete the message
+        const result = await CropChat.deleteMessage(messageId, userId);
+
+        if (result.success) {
+          // Emit to all connected clients in relevant rooms that the message was deleted
+          socket.broadcast.emit('messageDeleted', { messageId: result.messageId });
+          socket.emit('messageDeleted', { messageId: result.messageId });
+        }
+      } catch (error) {
+        console.error('deleteCropChatMessage error:', error);
+        socket.emit('cropChatError', error.message || 'Unable to delete message right now.');
+      }
+    });
   });
 };

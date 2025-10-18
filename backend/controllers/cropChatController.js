@@ -184,3 +184,41 @@ exports.getBuyers = async (req, res) => {
     });
   }
 };
+
+// Delete a chat message
+const deleteMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = parseId(req.user?.id);
+
+    if (!userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Authentication required.'
+      });
+    }
+
+    if (!messageId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message ID is required.'
+      });
+    }
+
+    const result = await CropChat.deleteMessage(messageId, userId);
+
+    return res.json({
+      success: true,
+      message: 'Message deleted successfully.',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to delete message.'
+    });
+  }
+};
+
+exports.deleteMessage = deleteMessage;
