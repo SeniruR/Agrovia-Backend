@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const FileType = require('file-type');
 
 // Setup multer for file uploads
 const storage = multer.diskStorage({
@@ -185,44 +186,6 @@ exports.addReview = async (req, res) => {
         });
       }
       
-      // Check if crop_reviews table exists, if not create it
-      try {
-        const checkTableQuery = `
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_schema = DATABASE() 
-          AND table_name = 'crop_reviews'
-        `;
-        
-        const [tableExists] = await connection.execute(checkTableQuery);
-        
-        if (tableExists.length === 0) {
-          console.log("crop_reviews table does not exist, creating it now...");
-          
-          // Create the crop_reviews table
-          const createTableQuery = `
-            CREATE TABLE crop_reviews (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              crop_id INT NOT NULL,
-              buyer_id INT NOT NULL,
-              rating INT NOT NULL,
-              comment TEXT NOT NULL,
-              attachments TEXT,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              INDEX (crop_id),
-              INDEX (buyer_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-          `;
-          
-          await connection.execute(createTableQuery);
-          console.log("crop_reviews table created successfully");
-        }
-      } catch (tableError) {
-        console.error("Error checking/creating crop_reviews table:", tableError);
-        await connection.rollback();
-        connection.release();
-        throw tableError; // Re-throw to be caught by the main try-catch
-      }
-      
       // Process uploaded files
       let attachmentUrls = [];
       
@@ -368,43 +331,64 @@ exports.getReviewById = async (req, res) => {
  * Serve review attachment
  */
 exports.getReviewAttachment = async (req, res) => {
+  let connection;
+  console.log(`[CONTROLLER] Getting attachment for review ID: ${req.params.reviewId}`);
+  
   try {
-    const { reviewId, fileName } = req.params;
+    const { reviewId } = req.params;
     
-    // Construct the file path
-    const filePath = path.join(__dirname, '../uploads/reviews', fileName);
+    // Get database connection
+    connection = await db.getConnection();
     
-    // Check if the file exists
-    if (!fs.existsSync(filePath)) {
+    // Query to get the attachment binary data from the database
+    const query = `
+      SELECT attachments
+      FROM crop_reviews
+      WHERE id = ?
+    `;
+    
+    const [reviews] = await connection.execute(query, [reviewId]);
+    
+    if (reviews.length === 0 || !reviews[0].attachments) {
+      console.log(`No review found or no attachment for review ID: ${reviewId}`);
       return res.status(404).json({
         success: false,
-        message: 'Attachment not found'
+        message: `Review ${reviewId} not found or has no attachment`
       });
     }
     
-    // Determine content type
-    const ext = path.extname(filePath).toLowerCase();
-    let contentType = 'application/octet-stream';
+    const attachmentData = reviews[0].attachments;
     
-    switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        contentType = 'image/jpeg';
-        break;
-      case '.png':
-        contentType = 'image/png';
-        break;
-      case '.gif':
-        contentType = 'image/gif';
-        break;
+    // Check if attachment is stored as JSON string (array of URLs)
+    try {
+      const parsed = JSON.parse(attachmentData);
+      if (Array.isArray(parsed)) {
+        console.log(`Found JSON array of URLs, redirecting to: ${parsed[0]}`);
+        return res.redirect(parsed[0]);
+      }
+    } catch (e) {
+      // Not JSON, should be binary data
+      console.log('Attachment is binary data, proceeding...');
     }
     
-    // Set content type
-    res.setHeader('Content-Type', contentType);
+    // Detect MIME type using file-type
+    try {
+      const fileType = await FileType.fromBuffer(attachmentData);
+      
+      if (fileType) {
+        console.log(`Detected file type: ${fileType.mime}`);
+        res.setHeader('Content-Type', fileType.mime);
+      } else {
+        console.log('Could not detect file type, using default');
+        res.setHeader('Content-Type', 'application/octet-stream');
+      }
+    } catch (err) {
+      console.error('Error detecting file type:', err);
+      res.setHeader('Content-Type', 'application/octet-stream');
+    }
     
-    // Stream the file to the response
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    // Send the binary data as response
+    return res.send(attachmentData);
   } catch (error) {
     console.error('Error serving attachment:', error);
     return res.status(500).json({
@@ -412,6 +396,171 @@ exports.getReviewAttachment = async (req, res) => {
       message: 'Failed to get attachment',
       error: error.message
     });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
+/**
+ * Update an existing review
+ */
+exports.updateReview = async (req, res) => {
+  let connection;
+  try {
+    // Get the review ID from the URL parameter
+    const { reviewId } = req.params;
+    const { rating, comment, buyer_id } = req.body;
+    
+    // Validate input
+    if (!rating) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating is required'
+      });
+    }
+    
+    // Get connection from the pool
+    connection = await db.getConnection();
+    
+    // Check if the review exists and belongs to the user
+    const [reviews] = await connection.execute(
+      'SELECT * FROM crop_reviews WHERE id = ?',
+      [reviewId]
+    );
+    
+    if (reviews.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
+    }
+    
+    // Check if the review belongs to the user
+    if (reviews[0].buyer_id !== parseInt(buyer_id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to update this review'
+      });
+    }
+    
+    // Process attachment if exists
+    let attachmentData = reviews[0].attachments;
+    let updateFields = '';
+    let updateParams = [];
+    
+    if (req.files && req.files.length > 0 && req.files[0].buffer) {
+      // Store the file binary data
+      attachmentData = req.files[0].buffer;
+      updateFields = 'rating = ?, comment = ?, attachments = ?, updated_at = NOW()';
+      updateParams = [rating, comment, attachmentData, reviewId];
+    } else {
+      // No new attachment, just update rating and comment
+      updateFields = 'rating = ?, comment = ?, updated_at = NOW()';
+      updateParams = [rating, comment, reviewId];
+    }
+    
+    // Update the review in the database
+    await connection.execute(
+      `UPDATE crop_reviews SET ${updateFields} WHERE id = ?`,
+      updateParams
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Review updated successfully',
+      review: {
+        id: reviewId,
+        rating,
+        comment,
+        attachment_urls: [`/api/v1/crop-reviews/${reviewId}/attachment`]
+      }
+    });
+  } catch (error) {
+    console.error('Error updating review:', error);
+    console.error('Request body:', req.body);
+    console.error('Request files:', req.files);
+    console.error('ReviewId:', req.params.reviewId);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update review',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? { 
+        stack: error.stack,
+        body: req.body,
+        files: req.files ? 'Files present' : 'No files' 
+      } : undefined
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
+  }
+};
+
+/**
+ * Delete a review
+ */
+exports.deleteReview = async (req, res) => {
+  let connection;
+  try {
+    // Get the review ID from the URL parameter
+    const { reviewId } = req.params;
+    const { buyer_id } = req.query;
+    
+    if (!buyer_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Buyer ID is required'
+      });
+    }
+    
+    // Get connection from the pool
+    connection = await db.getConnection();
+    
+    // Check if the review exists and belongs to the user
+    const [reviews] = await connection.execute(
+      'SELECT * FROM crop_reviews WHERE id = ?',
+      [reviewId]
+    );
+    
+    if (reviews.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
+    }
+    
+    // Check if the review belongs to the user
+    if (reviews[0].buyer_id !== parseInt(buyer_id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to delete this review'
+      });
+    }
+    
+    // Delete the review
+    await connection.execute(
+      'DELETE FROM crop_reviews WHERE id = ?',
+      [reviewId]
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Review deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting review:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete review',
+      error: error.message
+    });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 };
 

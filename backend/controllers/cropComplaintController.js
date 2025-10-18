@@ -1,5 +1,8 @@
 const CropComplaint = require('../models/CropComplaint');
 
+// Optional dev logger
+const devLog = (...args) => { if (process.env.DEBUG_ATTACHMENT_LOGS === 'true') console.log(...args); };
+
 // Add or update admin reply for a crop complaint
 exports.addReply = async (req, res, next) => {
   try {
@@ -12,6 +15,21 @@ exports.addReply = async (req, res, next) => {
     }
     res.json({ success: true, message: 'Reply added' });
   } catch (error) {
+    next(error);
+  }
+};
+
+// Delete admin reply for a crop complaint
+exports.deleteReply = async (req, res, next) => {
+  try {
+    // Update to set reply to null and replyed_at to null
+    const result = await CropComplaint.update(req.params.id, { reply: null, replyed_at: null });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Complaint not found' });
+    }
+    res.json({ success: true, message: 'Reply deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting reply:', error);
     next(error);
   }
 };
@@ -30,11 +48,11 @@ exports.createComplaint = async (req, res, next) => {
       orderNumber
     } = req.body;
 
-    // Debug: Log all received data
-    console.log('Received request body:', req.body);
-    console.log('to_farmer value:', to_farmer);
-    console.log('to_farmer type:', typeof to_farmer);
-    console.log('to_farmer is empty?', !to_farmer || to_farmer === '');
+  // Debug: Log all received data (opt-in)
+  devLog('Received request body:', req.body);
+  devLog('to_farmer value:', to_farmer);
+  devLog('to_farmer type:', typeof to_farmer);
+  devLog('to_farmer is empty?', !to_farmer || to_farmer === '');
 
     // Combine all uploaded files into a single BLOB array (as Buffer)
     let attachments = null;
@@ -132,7 +150,7 @@ exports.updateComplaint = async (req, res, next) => {
     }
     
     if (req.files && req.files.length > 0) {
-      console.log('Received files:', req.files.length);
+  devLog('Received files:', req.files.length);
       // Always store as JSON array of base64 strings
       updates.attachments = JSON.stringify(req.files.map(file => file.buffer.toString('base64')));
     }
@@ -144,12 +162,12 @@ exports.updateComplaint = async (req, res, next) => {
       }
     });
     
-    // Log final payload before DB update
-    console.log('Final payload for DB update:', JSON.stringify(updates, null, 2));
+  // Log final payload before DB update (opt-in)
+  devLog('Final payload for DB update:', JSON.stringify(updates, null, 2));
     
     try {
       const result = await CropComplaint.update(req.params.id, updates);
-      console.log('DB update result:', result);
+  devLog('DB update result:', result);
       
       if (result.affectedRows === 0) {
         return res.status(404).json({ 

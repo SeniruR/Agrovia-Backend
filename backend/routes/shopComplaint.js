@@ -26,6 +26,17 @@ router.get('/:id', shopComplaintController.getComplaintById);
 // Public: Update a complaint
 router.put('/:id', upload.array('attachments', 5), shopComplaintController.updateComplaint);
 
+const { authenticate, authorize } = require('../middleware/auth');
+
+// Admin: Add or update reply for a complaint
+router.put('/:id/reply', authenticate, authorize('admin'), shopComplaintController.addReply);
+
+// Admin: Delete reply for a complaint
+router.delete('/:id/reply/delete', authenticate, authorize('admin'), shopComplaintController.deleteReply);
+
+// Admin: Deactivate shop owner related to a complaint
+router.put('/:id/deactivate-shop-owner', authenticate, authorize('admin'), shopComplaintController.deactivateShopOwner);
+
 // Public: Delete a complaint
 router.delete('/:id', shopComplaintController.deleteComplaint);
 

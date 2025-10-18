@@ -7,6 +7,7 @@ class TransportComplaint {
       title,
       description,
       submittedBy,
+  userId = null,
       priority,
       transportCompany,
       location,
@@ -24,14 +25,15 @@ class TransportComplaint {
 
     const query = `
       INSERT INTO transport_complaints
-        (title, description, submitted_by, priority, transport_company, location, category, order_number, delivery_date, tracking_number, attachments, submitted_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (title, description, submitted_by, user_id, priority, transport_company, location, category, order_number, delivery_date, tracking_number, attachments, submitted_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     try {
       const [result] = await pool.execute(query, [
         title ?? null,
         description ?? null,
         submittedBy ?? null,
+        userId ?? null,
         priority ?? null,
         transportCompany ?? null,
         location ?? null,
@@ -49,12 +51,23 @@ class TransportComplaint {
   }
 
   // Get all complaints
-  static async findAll() {
-    const query = 'SELECT * FROM transport_complaints ORDER BY submitted_at DESC';
+  static async findAll(userId = null) {
+    // Return complaints with submitter full name joined from users
+    let query = `
+      SELECT tc.*, u.full_name AS submittedByName
+      FROM transport_complaints tc
+      LEFT JOIN users u ON tc.user_id = u.id
+    `;
+    const params = [];
+    if (userId) {
+      query += ' WHERE tc.submitted_by = ? OR tc.user_id = ?';
+      params.push(userId, userId);
+    }
+    query += ' ORDER BY tc.submitted_at DESC';
     try {
-      const [rows] = await pool.execute(query);
+      const [rows] = await pool.execute(query, params);
       // Parse attachments JSON for each row
-      return rows.map(row => {
+  return rows.map(row => {
         let parsed = [];
         if (row.attachments) {
           try { parsed = JSON.parse(row.attachments); } catch { parsed = []; }
@@ -72,7 +85,12 @@ class TransportComplaint {
 
   // Get complaint by ID
   static async findById(id) {
-    const query = 'SELECT * FROM transport_complaints WHERE id = ?';
+    const query = `
+      SELECT tc.*, u.full_name AS submittedByName
+      FROM transport_complaints tc
+      LEFT JOIN users u ON tc.user_id = u.id
+      WHERE tc.id = ?
+    `;
     try {
       const [rows] = await pool.execute(query, [id]);
       if (!rows[0]) return null;

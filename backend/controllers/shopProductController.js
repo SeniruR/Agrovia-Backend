@@ -190,9 +190,11 @@ exports.getAllViewMyShopProducts = async (req, res) => {
 
 exports.getShopProductById = async (req, res) => {
   try {
+    console.log(`🔍 Fetching shop product by ID: ${req.params.shopitemid}`);
     const product = await ShopProductModel.findById(req.params.shopitemid);
 
     if (!product) {
+      console.log(`❌ Product not found for ID: ${req.params.shopitemid}`);
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
@@ -200,7 +202,13 @@ exports.getShopProductById = async (req, res) => {
     if (product.organic_certified !== undefined) product.organic_certified = Boolean(product.organic_certified);
     if (product.terms_accepted !== undefined) product.terms_accepted = Boolean(product.terms_accepted);
 
-    res.status(200).json({ success: true, product });
+    console.log(`✅ Product found for ID ${req.params.shopitemid}:`, {
+      id: product.id,
+      name: product.product_name,
+      available_quantity: product.available_quantity
+    });
+
+    res.status(200).json({ success: true, data: product });
   } catch (error) {
     console.error('Error fetching product:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch product', error: error.message });

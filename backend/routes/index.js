@@ -35,6 +35,7 @@ router.get('/health', (req, res) => {
 
 // (undo) removed disableAccounts route registration
 
+
 // API routes
 router.use('/auth', authRoutes);
 router.use('/organizations', organizationRoutes);
