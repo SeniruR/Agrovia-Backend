@@ -29,6 +29,19 @@ class ShopReviewsController {
                 });
             }
             
+            // Process attachments before saving
+            let processedAttachments = attachments;
+            
+            // If attachments is a string that looks like JSON, parse it first
+            if (typeof attachments === 'string' && (attachments.trim().startsWith('[') || attachments.trim().startsWith('{'))) {
+                try {
+                    processedAttachments = JSON.parse(attachments);
+                } catch (err) {
+                    console.error('Error parsing attachments JSON:', err);
+                    processedAttachments = null;
+                }
+            }
+            
             // For backward compatibility, we keep shop_id parameter name but it's actually product_id
             // No need to check if active since we're checking for product existence
 
@@ -38,7 +51,7 @@ class ShopReviewsController {
                 farmer_name,
                 rating,
                 comment: comment || null, // Ensure null instead of undefined
-                attachments: attachments || null // Ensure null instead of undefined
+                attachments: processedAttachments // Use the processed attachments
             });
 
             res.status(201).json({ message: 'Review created successfully', review: newReview });
@@ -62,8 +75,30 @@ class ShopReviewsController {
             }
 
             const reviews = await ShopReviews.findByShopId(shop_id);
+            
+            // Add full URLs for attachments if needed
+            const reviewsWithUrls = reviews.map(review => {
+                // Already processed in the model, but let's ensure the structure is consistent
+                if (!review.attachment_urls && review.attachments && Array.isArray(review.attachments)) {
+                    review.attachment_urls = review.attachments.map(attachment => {
+                        if (typeof attachment === 'string') {
+                            // If it's just a filename, construct the URL
+                            if (!attachment.startsWith('http') && !attachment.startsWith('/uploads/')) {
+                                return `/uploads/${attachment}`;
+                            }
+                            return attachment;
+                        }
+                        // If it's an object with path property
+                        if (attachment && attachment.path) {
+                            return attachment.path;
+                        }
+                        return '';
+                    }).filter(Boolean);
+                }
+                return review;
+            });
 
-            res.status(200).json(reviews);
+            res.status(200).json(reviewsWithUrls);
         } catch (error) {
             console.error('Error fetching shop reviews:', error);
             res.status(500).json({ 
