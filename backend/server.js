@@ -19,6 +19,9 @@ const { testConnection } = require('./config/database');
 // Import routes
 const routes = require('./routes');
 
+// Import user routes
+const userRoutes = require('./routes/userRoutes');
+
 // Import order routes
 const orderRoutes = require('./routes/orders');
 
@@ -141,6 +144,7 @@ app.use('/api/v1/shop-products', shopProductRoutes);
 app.use('/api/v1/shop', shopStatsRoutes);
 // API routes
 app.use('/api/v1', routes);
+app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
