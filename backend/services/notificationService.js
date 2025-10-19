@@ -1,5 +1,6 @@
 const { pool } = require('../config/database');
 const { getIO } = require('../utils/socket');
+const NotificationModel = require('../models/notification.model');
 
 const parseMeta = (metaValue) => {
   if (!metaValue) return null;
@@ -24,8 +25,6 @@ const extractAlertId = (meta) => {
   );
 };
 
-const buildPlaceholders = (values) => values.map(() => '?').join(', ');
-
 const attachRecommendations = (alerts, recommendations) => {
   const byAlert = alerts.reduce((acc, alert) => {
     acc[alert.id] = {
@@ -45,37 +44,24 @@ const attachRecommendations = (alerts, recommendations) => {
 };
 
 const NotificationService = {
-  async fetchNotificationsForUser(userId, { onlyUnread = false } = {}) {
-    const filters = [userId];
-    let unreadClause = '';
-    if (onlyUnread) {
-      unreadClause = 'AND nr.readAt IS NULL';
+  async fetchNotificationsForUser(userId, { onlyUnread = false, includeCount = false } = {}) {
+    const hasAccess = await NotificationModel.userHasActivePestSubscription(userId);
+
+    if (!hasAccess) {
+      if (includeCount) {
+        return { notifications: [], unreadCount: 0, hasAccess: false };
+      }
+      return { notifications: [], hasAccess: false };
     }
 
-    const [rows] = await pool.query(
-      `SELECT 
-         nr.id AS recipientId,
-         nr.notificationId,
-         nr.userId,
-         nr.readAt,
-         nr.createdAt AS recipientCreatedAt,
-         nr.seenInPopup,
-         n.id AS id,
-         n.type,
-         n.title,
-         n.message,
-         n.meta,
-         n.createdAt
-       FROM notification_recipients nr
-       INNER JOIN notifications n ON n.id = nr.notificationId
-       WHERE nr.userId = ?
-         ${unreadClause}
-       ORDER BY n.createdAt DESC`,
-      filters
-    );
+    const rows = await NotificationModel.fetchForUser(userId, { onlyUnread });
 
     if (!rows.length) {
-      return [];
+      if (includeCount) {
+        const unreadCount = await NotificationModel.countUnreadForUser(userId);
+        return { notifications: [], unreadCount, hasAccess: true };
+      }
+      return { notifications: [], hasAccess: true };
     }
 
     const notifications = rows.map((row) => {
@@ -87,6 +73,7 @@ const NotificationService = {
         id: row.id,
         notification_id: row.id,
         recipientId: row.recipientId,
+        recipient_id: row.recipientId,
         type: row.type,
         title: row.title,
         message: row.message,
@@ -112,31 +99,12 @@ const NotificationService = {
       return notifications;
     }
 
-    const placeholders = buildPlaceholders(relevantAlertIds);
-
-    const [alertRows] = await pool.query(
-      `SELECT 
-         id,
-         moderatorId,
-         pestName,
-         symptoms,
-         severity,
-         createdAt
-       FROM PestAlerts
-       WHERE id IN (${placeholders})`,
-      relevantAlertIds
-    );
-
-    const [recommendationRows] = await pool.query(
-      `SELECT pestAlertId, recommendation
-       FROM PestRecommendations
-       WHERE pestAlertId IN (${placeholders})`,
-      relevantAlertIds
-    );
+    const alertRows = await NotificationModel.fetchAlertsByIds(relevantAlertIds);
+    const recommendationRows = await NotificationModel.fetchRecommendationsForAlerts(relevantAlertIds);
 
     const alertsById = attachRecommendations(alertRows, recommendationRows);
 
-    return notifications.map((notification) => {
+    const enriched = notifications.map((notification) => {
       const alert = notification.alertId ? alertsById[notification.alertId] || null : null;
       return {
         ...notification,
@@ -145,93 +113,65 @@ const NotificationService = {
         pestSeverity: alert?.severity || null
       };
     });
+
+    if (!includeCount) {
+      return { notifications: enriched, hasAccess: true };
+    }
+
+    const unreadCount = await NotificationModel.countUnreadForUser(userId);
+    return { notifications: enriched, unreadCount, hasAccess: true };
   },
 
   async markNotificationAsRead(notificationId, userId) {
-    const conn = await pool.getConnection();
+    const hasAccess = await NotificationModel.userHasActivePestSubscription(userId);
 
-    try {
-      await conn.beginTransaction();
-
-      const [rows] = await conn.execute(
-        `SELECT 
-           nr.id AS recipientId,
-           nr.notificationId,
-           n.meta
-         FROM notification_recipients nr
-         INNER JOIN notifications n ON n.id = nr.notificationId
-         WHERE nr.userId = ?
-           AND (nr.notificationId = ? OR nr.id = ?)
-         LIMIT 1`,
-        [userId, notificationId, notificationId]
-      );
-
-      if (!rows.length) {
-        await conn.rollback();
-        return null;
-      }
-
-      const row = rows[0];
-
-      await conn.execute(
-        'UPDATE notification_recipients SET readAt = NOW() WHERE id = ? AND readAt IS NULL',
-        [row.recipientId]
-      );
-
-      await conn.commit();
-
-      const meta = parseMeta(row.meta);
-      const alertId = extractAlertId(meta);
-
-      return {
-        notificationId: row.notificationId,
-        recipientId: row.recipientId,
-        alertId: alertId ? Number(alertId) : null
-      };
-    } catch (error) {
-      await conn.rollback();
-      throw error;
-    } finally {
-      conn.release();
+    if (!hasAccess) {
+      return { hasAccess: false };
     }
+
+    const recipient = await NotificationModel.findRecipientByIdentifier(userId, notificationId);
+
+    if (!recipient) {
+      return null;
+    }
+
+    await NotificationModel.markRecipientRead(recipient.recipientId);
+
+    const meta = parseMeta(recipient.meta);
+    const alertId = extractAlertId(meta);
+    const unreadCount = await NotificationModel.countUnreadForUser(userId);
+
+    return {
+      notificationId: recipient.notificationId,
+      recipientId: recipient.recipientId,
+      recipient_id: recipient.recipientId,
+      alertId: alertId ? Number(alertId) : null,
+      unreadCount,
+      hasAccess: true
+    };
   },
 
   async markNotificationAsSeen(notificationId, userId) {
-    const conn = await pool.getConnection();
+    const hasAccess = await NotificationModel.userHasActivePestSubscription(userId);
 
-    try {
-      await conn.beginTransaction();
-
-      const [rows] = await conn.execute(
-        `SELECT id
-         FROM notification_recipients
-         WHERE userId = ?
-           AND (notificationId = ? OR id = ?)
-         LIMIT 1`,
-        [userId, notificationId, notificationId]
-      );
-
-      if (!rows.length) {
-        await conn.rollback();
-        return null;
-      }
-
-      const recipientId = rows[0].id;
-
-      await conn.execute(
-        'UPDATE notification_recipients SET seenInPopup = NOW() WHERE id = ? AND seenInPopup IS NULL',
-        [recipientId]
-      );
-
-      await conn.commit();
-
-      return { notificationId, recipientId };
-    } catch (error) {
-      await conn.rollback();
-      throw error;
-    } finally {
-      conn.release();
+    if (!hasAccess) {
+      return { hasAccess: false };
     }
+
+    const recipient = await NotificationModel.findRecipientByIdentifier(userId, notificationId);
+
+    if (!recipient) {
+      return null;
+    }
+
+    await NotificationModel.markRecipientSeen(recipient.recipientId);
+
+    return {
+      notificationId: recipient.notificationId,
+      recipientId: recipient.recipientId,
+      recipient_id: recipient.recipientId,
+      hasAccess: true
+    };
   },
 
   async createPestAlertNotification({
@@ -264,7 +204,14 @@ const NotificationService = {
       const notificationId = notificationResult.insertId;
 
       const [recipients] = await conn.execute(
-        `SELECT id FROM users WHERE user_type IN ('1', '1.1') AND is_active = 1`
+        `SELECT DISTINCT u.id
+           FROM users u
+           INNER JOIN user_subscriptions us
+             ON us.user_id = u.id
+            AND us.status = 'active'
+            AND us.tier_id IN (5, 6)
+          WHERE u.user_type IN ('1', '1.1')
+            AND u.is_active = 1`
       );
 
       const recipientIds = recipients
@@ -283,6 +230,12 @@ const NotificationService = {
 
       try {
         const io = getIO();
+        const recipientRows = await NotificationModel.fetchRecipientsForNotification(notificationId, recipientIds);
+        const recipientsByUser = recipientRows.reduce((acc, row) => {
+          acc[row.userId] = row.id;
+          return acc;
+        }, {});
+
         const payload = {
           id: notificationId,
           notification_id: notificationId,
@@ -297,7 +250,12 @@ const NotificationService = {
         };
 
         recipientIds.forEach((userId) => {
-          io.to(`user:${userId}`).emit('new_pest_alert', payload);
+          const recipientId = recipientsByUser[userId] || null;
+          io.to(`user:${userId}`).emit('new_pest_alert', {
+            ...payload,
+            recipientId,
+            recipient_id: recipientId
+          });
         });
       } catch (socketError) {
         console.warn('notificationService: socket broadcast failed', socketError.message);
