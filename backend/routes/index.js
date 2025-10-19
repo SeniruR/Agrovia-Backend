@@ -60,6 +60,8 @@ router.use('/driver', driverRoutes);
 router.use('/crop-reviews', cropReviewRoutes);
 router.use('/crop-chats', cropChatRoutes);
 router.use('/transporter-reviews', transporterReviewRoutes);
+// Contact / Support
+router.use('/contact', require('./contact'));
 
 // Register admin routes
 router.use('/admin', require('./adminRoutes'));
