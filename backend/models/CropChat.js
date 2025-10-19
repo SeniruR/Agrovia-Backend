@@ -210,40 +210,45 @@ class CropChat {
 
   // Delete a chat message
   static async deleteMessage(messageId, userId) {
-    // Convert messageId to integer
-    const numericMessageId = Number.parseInt(messageId, 10);
+    // Handle both numeric IDs and client-generated IDs
+    let queryField = 'id';
+    let queryValue = messageId;
+    
+    // If messageId starts with 'client-', use client_message_id field
+    if (typeof messageId === 'string' && messageId.startsWith('client-')) {
+      queryField = 'client_message_id';
+      queryValue = messageId;
+    } else {
+      // Try to convert to integer for regular numeric IDs
+      const numericMessageId = Number.parseInt(messageId, 10);
+      if (Number.isNaN(numericMessageId)) {
+        // If it's not a numeric ID and doesn't start with 'client-', it might be a fallback ID
+        // In this case, we can't delete it as it's not a real database record
+        throw new Error(`Cannot delete message with invalid ID format: ${messageId}`);
+      }
+      queryValue = numericMessageId;
+    }
+    
     const numericUserId = Number.parseInt(userId, 10);
 
-    // Validate identifiers
-    if (Number.isNaN(numericMessageId) || Number.isNaN(numericUserId)) {
-      throw new Error('Invalid message ID or user ID supplied for message deletion.');
+    // Validate user ID
+    if (Number.isNaN(numericUserId)) {
+      throw new Error(`Invalid user ID supplied for message deletion: ${userId}`);
     }
 
-    // First, check if the message exists and belongs to the user
-    const checkQuery = `
-      SELECT id, sender_id FROM crop_chats 
-      WHERE id = ? AND sender_id = ?
-    `;
-
-    const [existingMessage] = await pool.execute(checkQuery, [numericMessageId, numericUserId]);
-
-    if (!existingMessage || existingMessage.length === 0) {
-      throw new Error('Message not found or you do not have permission to delete this message.');
-    }
-
-    // Delete the message
+    // Delete the message directly - if it doesn't exist or doesn't belong to user, affectedRows will be 0
     const deleteQuery = `
       DELETE FROM crop_chats 
-      WHERE id = ? AND sender_id = ?
+      WHERE ${queryField} = ? AND sender_id = ?
     `;
 
-    const [result] = await pool.execute(deleteQuery, [numericMessageId, numericUserId]);
+    const [result] = await pool.execute(deleteQuery, [queryValue, numericUserId]);
 
     if (result.affectedRows === 0) {
-      throw new Error('Failed to delete the message.');
+      throw new Error('Message not found, already deleted, or you do not have permission to delete this message.');
     }
 
-    return { success: true, messageId: numericMessageId };
+    return { success: true, messageId: queryValue };
   }
 }
 
