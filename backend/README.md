@@ -173,6 +173,14 @@ Use the health check endpoint to verify the API is running:
 curl http://localhost:5000/api/v1/health
 ```
 
+### Database maintenance
+
+The review image workflow stores base64-encoded blobs inside the `shop_reviews.attachments` column. Make sure your database schema uses a large text type for that field. Run the helper script below once per environment (development, staging, production) to expand the column to `LONGTEXT` if necessary:
+
+```bash
+node scripts/expand-shopreview-attachments.js
+```
+
 ### Creating Sample Data
 Before registering users, create organizations:
 ```bash

@@ -166,7 +166,7 @@ const createTables = async (connection) => {
         email VARCHAR(255),
         images JSON,
         minimum_quantity_bulk VARCHAR(100) NULL,
-        status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted') DEFAULT 'active',
+  status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted', 'sold') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_farmer_id (farmer_id),
@@ -176,6 +176,37 @@ const createTables = async (connection) => {
         INDEX idx_created_at (created_at),
         FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE
       )
+    `);
+
+    // Ensure new enum includes 'sold' for existing databases
+    const [statusColumn] = await connection.query(`SHOW COLUMNS FROM crop_posts LIKE 'status'`);
+    if (statusColumn?.length) {
+      const enumDefinition = statusColumn[0].Type || '';
+      if (!enumDefinition.includes("'sold'")) {
+        await connection.execute(`
+          ALTER TABLE crop_posts
+          MODIFY COLUMN status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted', 'sold') DEFAULT 'active'
+        `);
+      }
+    }
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS crop_chats (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        crop_id BIGINT UNSIGNED NOT NULL,
+        farmer_id BIGINT UNSIGNED NOT NULL,
+        buyer_id BIGINT UNSIGNED NOT NULL,
+        sender_id BIGINT UNSIGNED NOT NULL,
+        message TEXT NOT NULL,
+        client_message_id VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_crop_chats_room (crop_id, farmer_id, buyer_id, created_at),
+        INDEX idx_crop_chats_sender (sender_id, created_at),
+        CONSTRAINT fk_crop_chats_crop FOREIGN KEY (crop_id) REFERENCES crop_posts(id) ON DELETE CASCADE,
+        CONSTRAINT fk_crop_chats_farmer FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_crop_chats_buyer FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_crop_chats_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
 
 
@@ -231,6 +262,17 @@ const createTables = async (connection) => {
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure legacy schemas upgrade product image columns to LONGBLOB
+    const [productImageColumn] = await connection.query(`SHOW COLUMNS FROM products LIKE 'image'`);
+    if (productImageColumn?.length && productImageColumn[0].Type?.toLowerCase() !== 'longblob') {
+      await connection.execute(`ALTER TABLE products MODIFY image LONGBLOB NULL`);
+    }
+
+    const [productImagesImageColumn] = await connection.query(`SHOW COLUMNS FROM product_images LIKE 'image'`);
+    if (productImagesImageColumn?.length && productImagesImageColumn[0].Type?.toLowerCase() !== 'longblob') {
+      await connection.execute(`ALTER TABLE product_images MODIFY image LONGBLOB NULL`);
+    }
 
     // Seed common product categories if not present
     const defaultCategories = ['Seeds', 'Fertilizer', 'Chemical'];

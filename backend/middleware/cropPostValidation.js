@@ -66,7 +66,7 @@ const updateCropPostSchema = Joi.object({
   organic_certified: Joi.boolean().optional(),
   pesticide_free: Joi.boolean().optional(),
   freshly_harvested: Joi.boolean().optional(),
-  status: Joi.string().valid('pending', 'approved', 'rejected', 'sold', 'available').optional()
+  status: Joi.string().valid('pending', 'approved', 'rejected', 'sold', 'available', 'active', 'inactive', 'reserved', 'deleted').optional()
 }).unknown(true); // <-- allow unknown fields
 
 const validateCropPost = (req, res, next) => {

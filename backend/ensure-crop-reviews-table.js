@@ -26,7 +26,7 @@ async function ensureCropReviewsTable() {
           buyer_id INT NOT NULL,
           rating INT NOT NULL,
           comment TEXT NOT NULL,
-          attachments TEXT,
+          attachments LONGTEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX (crop_id),
@@ -38,7 +38,7 @@ async function ensureCropReviewsTable() {
     } else {
       console.log('crop_reviews table already exists');
       
-      // Check if the updated_at column exists
+      // Ensure updated_at column exists
       const [updatedAtExists] = await connection.execute(`
         SHOW COLUMNS FROM crop_reviews LIKE 'updated_at'
       `);
@@ -55,6 +55,22 @@ async function ensureCropReviewsTable() {
         console.log('Added updated_at column successfully');
       } else {
         console.log('updated_at column already exists');
+      }
+
+      // Ensure attachments column can store large payloads
+      const [attachmentColumn] = await connection.execute(`
+        SHOW COLUMNS FROM crop_reviews LIKE 'attachments'
+      `);
+
+      if (attachmentColumn.length > 0) {
+        const columnType = (attachmentColumn[0].Type || '').toUpperCase();
+        if (!columnType.includes('LONGTEXT') && !columnType.includes('LONGBLOB')) {
+          console.log('Altering attachments column to LONGTEXT for larger payloads...');
+          await connection.execute(`
+            ALTER TABLE crop_reviews MODIFY attachments LONGTEXT NULL
+          `);
+          console.log('Attachments column updated to LONGTEXT');
+        }
       }
     }
     
