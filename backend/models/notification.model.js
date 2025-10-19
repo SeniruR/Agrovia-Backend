@@ -35,7 +35,8 @@ const NotificationModel = {
       `SELECT 
          nr.id AS recipientId,
          nr.notificationId,
-         n.meta
+         n.meta,
+         n.type
        FROM notification_recipients nr
        INNER JOIN notifications n ON n.id = nr.notificationId
        WHERE nr.userId = ?
@@ -103,6 +104,51 @@ const NotificationModel = {
       `SELECT pestAlertId, recommendation
        FROM PestRecommendations
        WHERE pestAlertId IN (${placeholders})`,
+      alertIds
+    );
+
+    return rows;
+  },
+
+  async fetchWeatherAlertsByIds(alertIds) {
+    if (!alertIds.length) {
+      return [];
+    }
+
+    const placeholders = alertIds.map(() => '?').join(', ');
+
+    const [rows] = await pool.query(
+      `SELECT 
+         wa.id,
+         wa.moderatorId,
+         wa.weatherType,
+         wa.description,
+         wa.severity,
+         wa.dateIssued,
+         wa.createdAt,
+         u.full_name AS authorName,
+         u.email AS authorEmail
+       FROM WeatherAlerts wa
+       LEFT JOIN users u ON u.id = wa.moderatorId
+       WHERE wa.id IN (${placeholders})`,
+      alertIds
+    );
+
+    return rows;
+  },
+
+  async fetchAreasForWeatherAlerts(alertIds) {
+    if (!alertIds.length) {
+      return [];
+    }
+
+    const placeholders = alertIds.map(() => '?').join(', ');
+
+    const [rows] = await pool.query(
+      `SELECT weatherAlertId, areaName
+         FROM WeatherAlertAreas
+         WHERE weatherAlertId IN (${placeholders})
+         ORDER BY id`,
       alertIds
     );
 
