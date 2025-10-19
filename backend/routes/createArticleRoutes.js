@@ -35,6 +35,16 @@ router.get(
 );
 
 router.get(
+	'/public',
+	createArticleController.getPublishedArticlesPublic,
+);
+
+router.get(
+	'/public/:articleId',
+	createArticleController.getPublishedArticleByIdPublic,
+);
+
+router.get(
 	'/:articleId',
 	authenticate,
 	authorize(['moderator', 'main_moderator', 'admin']),

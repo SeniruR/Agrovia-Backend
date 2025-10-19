@@ -307,6 +307,63 @@ class CreateArticleModel {
 
 		return result.affectedRows > 0;
 	}
+
+	static async getPublishedArticles() {
+		const [rows] = await pool.query(
+			`SELECT ka.article_id, ka.title, ka.description, ka.status, ka.created_at, ka.updated_at,
+					ka.cover_image_blob, ka.cover_image_mime_type, ka.cover_image_filename,
+					ka.requested_by, u.full_name AS requested_by_name, u.email AS requested_by_email
+			 FROM knowledge_article ka
+			 LEFT JOIN users u ON u.id = ka.requested_by
+			 WHERE ka.status = 'published'
+			 ORDER BY ka.updated_at DESC, ka.created_at DESC`,
+		);
+
+		if (rows.length === 0) {
+			return [];
+		}
+
+		const articleIds = rows.map((row) => row.article_id);
+		const placeholders = articleIds.map(() => '?').join(', ');
+		let supportingRows = [];
+
+		if (articleIds.length > 0) {
+			const [images] = await pool.query(
+				`SELECT image_id, article_id, image_blob, image_mime_type, image_filename, created_at
+					 FROM knowledge_article_images
+					WHERE article_id IN (${placeholders})
+					ORDER BY article_id ASC, image_id ASC`,
+				articleIds,
+			);
+			supportingRows = images;
+		}
+
+		const imagesByArticle = supportingRows.reduce((acc, row) => {
+			if (!acc[row.article_id]) {
+				acc[row.article_id] = [];
+			}
+			acc[row.article_id].push(row);
+			return acc;
+		}, {});
+
+		return rows.map((row) =>
+			formatArticleRow(row, {
+				includeCoverBinary: true,
+				includeSupportImages: true,
+				supportingRows: imagesByArticle[row.article_id] || [],
+			}),
+		);
+	}
+
+	static async getPublishedArticleById(articleId) {
+		const article = await this.getArticleById(articleId);
+
+		if (!article || article.status !== 'published') {
+			return null;
+		}
+
+		return article;
+	}
 }
 
 module.exports = CreateArticleModel;

@@ -230,3 +230,44 @@ exports.deleteSupportingImage = async (req, res) => {
 		});
 	}
 };
+
+exports.getPublishedArticlesPublic = async (_req, res) => {
+	try {
+		const articles = await CreateArticleModel.getPublishedArticles();
+		return res.status(200).json({
+			success: true,
+			data: articles,
+		});
+	} catch (error) {
+		console.error('Error fetching published articles:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Failed to fetch published articles.',
+		});
+	}
+};
+
+exports.getPublishedArticleByIdPublic = async (req, res) => {
+	try {
+		const { articleId } = req.params;
+		const article = await CreateArticleModel.getPublishedArticleById(articleId);
+
+		if (!article) {
+			return res.status(404).json({
+				success: false,
+				message: 'Article not found.',
+			});
+		}
+
+		return res.status(200).json({
+			success: true,
+			data: article,
+		});
+	} catch (error) {
+		console.error('Error fetching published article:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Failed to fetch article.',
+		});
+	}
+};
