@@ -217,6 +217,28 @@ async function sendFarmerRemovalEmail(to, orgName) {
   await transporter.sendMail(mailOptions);
 }
 
+/**
+ * Send password reset verification code to user
+ * @param {string} to - recipient email
+ * @param {string} code - verification code
+ * @param {number} expiresInMinutes - expiry window in minutes
+ */
+async function sendPasswordResetCodeEmail(to, code, expiresInMinutes = 15) {
+  const minutes = Number.isFinite(expiresInMinutes) ? expiresInMinutes : 15;
+  const mailOptions = {
+    from: process.env.NOTIFY_EMAIL_USER,
+    to,
+    subject: 'Your Agrovia password reset code',
+    text: `You recently requested to reset your Agrovia password.\n\nUse the following verification code to continue: ${code}\n\nThis code will expire in ${minutes} minutes. If you did not make this request, please ignore this email.`,
+    html: `<p>You recently requested to reset your Agrovia password.</p>
+      <p style="font-size:18px;font-weight:bold;letter-spacing:4px;">${code}</p>
+      <p>This code will expire in <b>${minutes}</b> minutes. If you did not make this request, you can safely ignore this email.</p>
+      <br><p>Best regards,<br>Agrovia Team</p>`
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
 module.exports = {
   sendLogisticsApprovalEmail,
   sendLogisticsRejectionEmail,
@@ -228,5 +250,6 @@ module.exports = {
   sendOrganizationSuspensionEmail,
   sendOrganizationActivationEmail,
   sendOrganizationRemovalEmail,
-  sendFarmerRemovalEmail
+  sendFarmerRemovalEmail,
+  sendPasswordResetCodeEmail
 };

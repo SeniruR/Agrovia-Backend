@@ -1,7 +1,15 @@
 const express = require('express');
 const { upload, uploadMemory, uploadProfileImage } = require('../config/upload');
-const { authLimiter } = require('../middleware/rateLimiter');
-const { validate, registerFarmerSchema, registerCommitteeMemberSchema, registerBuyerSchema, loginSchema } = require('../middleware/validation');
+const {
+  validate,
+  registerFarmerSchema,
+  registerCommitteeMemberSchema,
+  registerBuyerSchema,
+  loginSchema,
+  forgotPasswordRequestSchema,
+  forgotPasswordVerifySchema,
+  forgotPasswordResetSchema
+} = require('../middleware/validation');
 const { authenticate, authorize } = require('../middleware/auth');
 const {
   registerFarmer,
@@ -15,12 +23,16 @@ const {
 } = require('../controllers/authController');
 const { registerTransporter } = require('../controllers/transporterController');
 const { registerModerator } = require('../controllers/moderatorController');
+const {
+  requestPasswordReset,
+  verifyResetCode,
+  resetPassword
+} = require('../controllers/passwordResetController');
 
 const router = express.Router();
 
 // Shop Owner registration: must handle file upload before validation
 router.post('/register/shop-owner',
-  authLimiter,
   uploadMemory.fields([
     { name: 'profile_image', maxCount: 1 },
     { name: 'shop_license', maxCount: 1 },
@@ -42,7 +54,6 @@ function coerceFarmerFields(req, res, next) {
 
 // Farmer registration: must handle file upload before validation
 router.post('/register/farmer', 
-  authLimiter,
   uploadMemory.single('profile_image'),
   coerceFarmerFields, // <-- coerce land_size to number
   validate(registerFarmerSchema),
@@ -53,35 +64,45 @@ router.post('/register/farmer',
 // Buyer registration: must handle file upload before validation
 // Use uploadProfileImage for buyer profile images (images only)
 router.post('/register/buyer',
-  authLimiter,
   uploadProfileImage.single('profile_image'),
   validate(registerBuyerSchema),
   registerBuyer
 );
 
 router.post('/register/committee-member',
-  authLimiter,
   upload.single('certificate'),
   validate(registerCommitteeMemberSchema),
   registerCommitteeMember
 );
 
 router.post('/login',
-  authLimiter,
   validate(loginSchema),
   login
 );
 
+router.post('/forgot-password/request',
+  validate(forgotPasswordRequestSchema),
+  requestPasswordReset
+);
+
+router.post('/forgot-password/verify',
+  validate(forgotPasswordVerifySchema),
+  verifyResetCode
+);
+
+router.post('/forgot-password/reset',
+  validate(forgotPasswordResetSchema),
+  resetPassword
+);
+
 // Transporter registration: must handle file upload before validation (images only, memory)
 router.post('/register/transporter',
-  authLimiter,
   uploadProfileImage.single('profile_image'),
   registerTransporter
 );
 
 // Moderator registration: must handle file upload before validation
 router.post('/register/moderator',
-  authLimiter,
   uploadProfileImage.single('profile_image'), // Use memory storage, image-only
   registerModerator
 );
