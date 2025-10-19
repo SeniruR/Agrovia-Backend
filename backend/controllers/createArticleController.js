@@ -45,9 +45,9 @@ exports.createArticle = async (req, res) => {
 			});
 		}
 
-			const articleStatus = status && ALLOWED_STATUSES.has(status) ? status : 'pending';
+		const articleStatus = status && ALLOWED_STATUSES.has(status) ? status : 'pending';
 
-			const article = await CreateArticleModel.createArticle({
+		const article = await CreateArticleModel.createArticle({
 			title: title.trim(),
 			description: description.trim(),
 			status: articleStatus,
@@ -127,10 +127,43 @@ exports.updateArticle = async (req, res) => {
 	try {
 		const { articleId } = req.params;
 		const { title, description, status, removeImageIds } = req.body;
+		const existingArticle = await CreateArticleModel.getArticleById(articleId);
 
-		const coverFile = req.files?.coverImage?.[0];
+		if (!existingArticle) {
+			return res.status(404).json({
+				success: false,
+				message: 'Article not found.',
+			});
+		}
+
+		const userRole = req.user?.role || null;
+		const userId = req.user?.id != null ? Number(req.user.id) : null;
+		const isModerator = userRole === 'moderator';
+		const isOwner = existingArticle.requestedBy != null && userId != null && Number(existingArticle.requestedBy) === userId;
+
+		if (isModerator) {
+			if (!isOwner) {
+				return res.status(403).json({
+					success: false,
+					message: 'You can only modify article requests you created.',
+				});
+			}
+			if (existingArticle.status !== 'pending') {
+				return res.status(400).json({
+					success: false,
+					message: 'Only pending article requests can be edited.',
+				});
+			}
+		}
+
+		if (status && ['published', 'rejected'].includes(status) && !['main_moderator', 'admin'].includes(userRole)) {
+			return res.status(403).json({
+				success: false,
+				message: 'Only main moderators or administrators can approve or reject article requests.',
+			});
+		}
+
 		let removeIds = [];
-
 		if (removeImageIds) {
 			if (Array.isArray(removeImageIds)) {
 				removeIds = removeImageIds.map((id) => Number(id)).filter(Number.isFinite);
@@ -150,17 +183,27 @@ exports.updateArticle = async (req, res) => {
 			}
 		}
 
-		if (status && ['published', 'rejected'].includes(status) && !['main_moderator', 'admin'].includes(req.user?.role)) {
-			return res.status(403).json({
-				success: false,
-				message: 'Only main moderators or administrators can approve or reject article requests.',
-			});
+		const coverFile = req.files?.coverImage?.[0];
+
+		let nextStatus;
+		if (status && ALLOWED_STATUSES.has(status)) {
+			if (isModerator) {
+				if (status !== existingArticle.status) {
+					return res.status(403).json({
+						success: false,
+						message: 'Moderators cannot change the status of their article requests.',
+					});
+				}
+				nextStatus = undefined;
+			} else {
+				nextStatus = status;
+			}
 		}
 
 		const updated = await CreateArticleModel.updateArticle(articleId, {
 			title: title?.trim(),
 			description: description?.trim(),
-			status: status && ALLOWED_STATUSES.has(status) ? status : undefined,
+			status: nextStatus,
 			coverImage: buildCoverImagePayload(coverFile),
 			newSupportingImages: buildSupportingImagePayload(req.files?.supportingImages),
 			removeSupportingImageIds: removeIds,
@@ -184,6 +227,34 @@ exports.updateArticle = async (req, res) => {
 exports.deleteArticle = async (req, res) => {
 	try {
 		const { articleId } = req.params;
+		const existingArticle = await CreateArticleModel.getArticleById(articleId);
+
+		if (!existingArticle) {
+			return res.status(404).json({
+				success: false,
+				message: 'Article not found.',
+			});
+		}
+
+		const userRole = req.user?.role || null;
+		const userId = req.user?.id != null ? Number(req.user.id) : null;
+		const isModerator = userRole === 'moderator';
+		const isOwner = existingArticle.requestedBy != null && userId != null && Number(existingArticle.requestedBy) === userId;
+
+		if (isModerator) {
+			if (!isOwner) {
+				return res.status(403).json({
+					success: false,
+					message: 'You can only delete article requests you created.',
+				});
+			}
+			if (existingArticle.status !== 'pending') {
+				return res.status(400).json({
+					success: false,
+					message: 'Only pending article requests can be deleted.',
+				});
+			}
+		}
 		const deleted = await CreateArticleModel.deleteArticle(articleId);
 
 		if (!deleted) {
@@ -209,6 +280,34 @@ exports.deleteArticle = async (req, res) => {
 exports.deleteSupportingImage = async (req, res) => {
 	try {
 		const { articleId, imageId } = req.params;
+		const existingArticle = await CreateArticleModel.getArticleById(articleId);
+
+		if (!existingArticle) {
+			return res.status(404).json({
+				success: false,
+				message: 'Article not found.',
+			});
+		}
+
+		const userRole = req.user?.role || null;
+		const userId = req.user?.id != null ? Number(req.user.id) : null;
+		const isModerator = userRole === 'moderator';
+		const isOwner = existingArticle.requestedBy != null && userId != null && Number(existingArticle.requestedBy) === userId;
+
+		if (isModerator) {
+			if (!isOwner) {
+				return res.status(403).json({
+					success: false,
+					message: 'You can only remove images from article requests you created.',
+				});
+			}
+			if (existingArticle.status !== 'pending') {
+				return res.status(400).json({
+					success: false,
+					message: 'Only pending article requests can be modified.',
+				});
+			}
+		}
 		const deleted = await CreateArticleModel.deleteSupportingImage(articleId, imageId);
 
 		if (!deleted) {
