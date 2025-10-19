@@ -86,6 +86,24 @@ const createTables = async (connection) => {
       )
     `);
 
+    // Password reset tokens table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT UNSIGNED NOT NULL,
+        code_hash VARCHAR(255) NOT NULL,
+        reset_session_hash VARCHAR(255) DEFAULT NULL,
+        expires_at DATETIME NOT NULL,
+        verified_at DATETIME DEFAULT NULL,
+        used TINYINT(1) DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_password_reset_user (user_id),
+        INDEX idx_password_reset_expires (expires_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
     // Shop details table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS shop_details (
