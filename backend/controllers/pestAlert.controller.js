@@ -7,16 +7,64 @@ const { notifyPremiumFarmers } = require('../socket');
 exports.createPestAlert = async (req, res) => {
   try {
     const { pestName, symptoms, severity, recommendations, postedByUserId } = req.body;
-    // Extract user ID from token (can be any authenticated user)
+    // Extract user ID from token (authenticated user is already verified by middleware)
     const userId = req.user?.id || postedByUserId;
+    const userType = req.user?.user_type;
+    
+    console.log(`User attempting to create pest alert: ID=${userId}, Type=${userType}`);
     
     if (!userId || !pestName || !symptoms || !severity || !Array.isArray(recommendations)) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    console.log(`Creating pest alert for user ${userId}`);
+    
+    // Create the pest alert
     await PestAlertModel.createPestAlert(userId, pestName, symptoms, severity, recommendations);
+    
+    // Send notifications to premium farmers (non-blocking)
+    setImmediate(async () => {
+      try {
+        // Find all premium farmers
+        const [farmers] = await pool.execute(
+          'SELECT id FROM users WHERE user_type IN (1.1, "1.1") AND premium = true'
+        );
+        const farmerIds = farmers.map(f => f.id);
+
+        if (farmerIds.length > 0) {
+          console.log(`Notifying ${farmerIds.length} premium farmers about new pest alert`);
+          
+          // Create notification
+          const notificationId = await Notification.create(
+            'New Pest Alert',
+            `${pestName}: ${symptoms}`,
+            'pest_alert'
+          );
+
+          // Add recipients
+          await Notification.addRecipients(notificationId, farmerIds);
+
+          // Real-time notify via socket
+          if (typeof notifyPremiumFarmers === 'function') {
+            notifyPremiumFarmers(
+              { 
+                id: notificationId, 
+                title: 'New Pest Alert', 
+                message: `${pestName}: ${symptoms}`, 
+                type: 'pest_alert' 
+              },
+              farmerIds
+            );
+          }
+        }
+      } catch (notificationError) {
+        console.warn('Failed to send notifications:', notificationError.message);
+      }
+    });
+    
     res.status(201).json({ message: 'Pest alert created successfully' });
   } catch (err) {
+    console.error('Error creating pest alert:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -87,43 +135,3 @@ exports.deletePestAlert = async (req, res) => {
 };
 
 
-exports.createPestAlert = async (req, res) => {
-  // Your existing pest alert creation logic
-  // Assume pest alert is created and you have access to req.user (moderator/admin)
-  const { title, description } = req.body;
-  try {
-    // Only moderators/admins can create pest alerts
-    if (![5.1].includes(req.user.user_type)) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
-
-    // Create pest alert (use your existing model)
-    // const pestAlertId = await PestAlert.create(...);
-
-    // Find all premium farmers
-    const [farmers] = await db.query(
-      'SELECT id FROM users WHERE user_type = 1.1 AND premium = true'
-    );
-    const farmerIds = farmers.map(f => f.id);
-
-    // Create notification
-    const notificationId = await Notification.create(
-      'New Pest Alert',
-      description,
-      'pest_alert'
-    );
-
-    // Add recipients
-    await Notification.addRecipients(notificationId, farmerIds);
-
-    // Real-time notify via socket
-    notifyPremiumFarmers(
-      { id: notificationId, title: 'New Pest Alert', message: description, type: 'pest_alert' },
-      farmerIds
-    );
-
-    res.status(201).json({ message: 'Pest alert and notifications sent.' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to create pest alert/notification.' });
-  }
-};
