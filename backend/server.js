@@ -1,12 +1,13 @@
 require('dotenv').config();
 const express = require('express');
-// const cors = require('cors');
-
 const helmet = require('helmet');
 const path = require('path');
 const mimeTypes = require('mime-types');
+const cors = require('cors');
+const http = require('http');
 
-
+// Import Socket.io initialization
+const { initSocket } = require('./socket');
 
 // Import middleware
 const { generalLimiter } = require('./middleware/rateLimiter');
@@ -17,56 +18,39 @@ const { testConnection } = require('./config/database');
 
 // Import routes
 const routes = require('./routes');
-
-// Import order routes
 const orderRoutes = require('./routes/orders');
-
-// Import admin routes
 const adminRoutes = require('./routes/adminRoutes');
+const shopProductRoutes = require('./routes/shopProductRoutes');
+const shopStatsRoutes = require('./routes/shopStats');
+const transportAllocationRoutes = require('./routes/TransportRoutes');
+const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
+const pestAlertRoutes = require('./routes/pestAlert.routes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Create Express app
-const cors = require('cors');
 const app = express();
-// Enable CORS for frontend dev server
-app.use(cors({
-  origin: 'http://localhost:5174',
-  credentials: true
-}));
 const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
 
-
-
+// CORS configuration
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite default ports
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  // allow common custom headers used by the frontend
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
 }));
 
-// Explicitly respond to preflight requests with the same CORS config to ensure
-// Access-Control-Allow-Headers contains our custom header names (some clients
-// require exact matches on preflight responses).
+// Explicitly respond to preflight requests with the same CORS config
 app.options('*', cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
 }));
-// CORS configuration
-// app.use(cors({
-//   origin: process.env.NODE_ENV === 'production' 
-//     ? ['https://yourdomain.com'] // Replace with your frontend domain
-//     : ['http://localhost:3000', 'http://localhost:3001'], // React dev server
-//   credentials: true,
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization']
-// }));
 
-// Rate limiting: in development we skip the general limiter entirely to avoid noisy 429s
+// Rate limiting
 if (process.env.NODE_ENV === 'development') {
   // No-op rate limiting in dev
   app.use((req, res, next) => next());
@@ -94,26 +78,17 @@ app.use('/uploads/crop-images', cors(), express.static(path.join(__dirname, 'upl
     res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
   }
 }));
-const shopProductRoutes = require('./routes/shopProductRoutes');
-const shopStatsRoutes = require('./routes/shopStats');
-// Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
-const transportAllocationRoutes = require('./routes/TransportRoutes');
-app.use('/api/transport-allocations', transportAllocationRoutes);
 
+// API routes
+app.use('/api/transport-allocations', transportAllocationRoutes);
 app.use('/api/v1/shop-products', shopProductRoutes);
 app.use('/api/v1/shop', shopStatsRoutes);
-// API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/admin', adminRoutes);
-
-// Shop reviews routes
-const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
 app.use('/api/v1/shop-reviews', shopReviewsRoutes);
-
-// Pest alert routes
-const pestAlertRoutes = require('./routes/pestAlert.routes');
 app.use('/api', pestAlertRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -129,6 +104,10 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
+// Create HTTP server and initialize Socket.io
+const server = http.createServer(app);
+initSocket(server);
+
 // Start server
 const startServer = async () => {
   try {
@@ -141,13 +120,14 @@ const startServer = async () => {
     }
 
     // Start the server
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`
 🚀 Agrovia Backend Server Started
 📍 Environment: ${process.env.NODE_ENV || 'development'}
 🌐 Server: http://localhost:${PORT}
 🔗 API Base: http://localhost:${PORT}/api/v1
 📊 Health Check: http://localhost:${PORT}/api/v1/health
+🔔 Socket.io: Enabled for real-time notifications
       `);
     });
   } catch (error) {
