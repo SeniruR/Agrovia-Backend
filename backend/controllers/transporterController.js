@@ -19,7 +19,9 @@ const registerTransporter = async (req, res, next) => {
       capacity_unit,
       license_number,
       license_expiry,
-      additional_info
+      additional_info,
+      base_rate,
+      per_km_rate
     } = req.body;
 
     // Check if user already exists
@@ -75,7 +77,9 @@ const registerTransporter = async (req, res, next) => {
       capacity_unit,
       license_number,
       license_expiry,
-      additional_info
+      additional_info,
+      base_rate,
+      per_km_rate
     });
 
     // After user is created, insert into disable_accounts with case_id = 3 (pending review)
@@ -108,4 +112,92 @@ const getAllTransporters = async (req, res, next) => {
   }
 };
 
-module.exports = { registerTransporter, getAllTransporters };
+const getTransporterById = async (req, res, next) => {
+  try {
+    const transporterId = Number(req.params.id);
+    if (!transporterId || Number.isNaN(transporterId)) {
+      return res.status(400).json({ success: false, message: 'Invalid transporter id' });
+    }
+
+    const transporter = await Transporter.findById(transporterId);
+    if (!transporter) {
+      return res.status(404).json({ success: false, message: 'Transporter not found', data: null });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Transporter retrieved successfully',
+      data: transporter
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateTransporterPricing = async (req, res, next) => {
+  try {
+    const transporterId = Number(req.params.id);
+    if (!transporterId || Number.isNaN(transporterId)) {
+      return res.status(400).json({ success: false, message: 'Invalid transporter id' });
+    }
+
+    const hasBaseRate = Object.prototype.hasOwnProperty.call(req.body, 'base_rate') ||
+      Object.prototype.hasOwnProperty.call(req.body, 'baseRate');
+    const hasPerKmRate = Object.prototype.hasOwnProperty.call(req.body, 'per_km_rate') ||
+      Object.prototype.hasOwnProperty.call(req.body, 'perKmRate');
+
+    const rawBase = hasBaseRate ? (req.body.base_rate ?? req.body.baseRate) : undefined;
+    const rawPer = hasPerKmRate ? (req.body.per_km_rate ?? req.body.perKmRate) : undefined;
+
+    const sanitizeRate = (key, value) => {
+      if (value === undefined) return { shouldUpdate: false };
+      if (value === null) return { shouldUpdate: true, value: null };
+      const trimmed = String(value).trim();
+      if (trimmed === '') {
+        return { shouldUpdate: true, value: null };
+      }
+      const num = Number(trimmed);
+      if (Number.isNaN(num) || num < 0) {
+        throw new Error(`${key} must be a non-negative number`);
+      }
+      return { shouldUpdate: true, value: num.toString() };
+    };
+
+    let updates = {};
+    try {
+      const baseResult = sanitizeRate('base_rate', rawBase);
+      if (baseResult.shouldUpdate) {
+        updates.base_rate = baseResult.value;
+      }
+      const perResult = sanitizeRate('per_km_rate', rawPer);
+      if (perResult.shouldUpdate) {
+        updates.per_km_rate = perResult.value;
+      }
+    } catch (validationErr) {
+      return res.status(400).json({ success: false, message: validationErr.message });
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No pricing values supplied' });
+    }
+
+    const result = await Transporter.updatePricing(transporterId, updates);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Transporter not found' });
+    }
+
+    // Return updated transporter record
+    const transporter = await Transporter.findById(transporterId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Transporter pricing updated successfully',
+      data: transporter || null
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { registerTransporter, getAllTransporters, getTransporterById, updateTransporterPricing };
