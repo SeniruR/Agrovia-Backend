@@ -158,6 +158,9 @@ app.use('/api/v1/admin', adminRoutes);
 const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
 app.use('/api/v1/shop-reviews', shopReviewsRoutes);
 
+// Pest alert routes
+const pestAlertRoutes = require('./routes/pestAlert.routes');
+app.use('/api', pestAlertRoutes);
 // File upload routes
 const uploadRoutes = require('./routes/uploadRoutes');
 app.use('/api/v1/upload', uploadRoutes);
