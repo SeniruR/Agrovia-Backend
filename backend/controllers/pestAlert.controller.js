@@ -1,5 +1,8 @@
 const PestAlertModel = require('../models/pestAlert.model');
 const { pool } = require('../config/database');
+const Notification = require('../models/Notification');
+const { notifyPremiumFarmers } = require('../socket');
+
 
 exports.createPestAlert = async (req, res) => {
   try {
@@ -80,5 +83,47 @@ exports.deletePestAlert = async (req, res) => {
     res.json({ message: 'Pest alert deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+
+exports.createPestAlert = async (req, res) => {
+  // Your existing pest alert creation logic
+  // Assume pest alert is created and you have access to req.user (moderator/admin)
+  const { title, description } = req.body;
+  try {
+    // Only moderators/admins can create pest alerts
+    if (![5.1].includes(req.user.user_type)) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Create pest alert (use your existing model)
+    // const pestAlertId = await PestAlert.create(...);
+
+    // Find all premium farmers
+    const [farmers] = await db.query(
+      'SELECT id FROM users WHERE user_type = 1.1 AND premium = true'
+    );
+    const farmerIds = farmers.map(f => f.id);
+
+    // Create notification
+    const notificationId = await Notification.create(
+      'New Pest Alert',
+      description,
+      'pest_alert'
+    );
+
+    // Add recipients
+    await Notification.addRecipients(notificationId, farmerIds);
+
+    // Real-time notify via socket
+    notifyPremiumFarmers(
+      { id: notificationId, title: 'New Pest Alert', message: description, type: 'pest_alert' },
+      farmerIds
+    );
+
+    res.status(201).json({ message: 'Pest alert and notifications sent.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create pest alert/notification.' });
   }
 };
