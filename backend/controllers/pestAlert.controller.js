@@ -17,52 +17,77 @@ exports.createPestAlert = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    console.log(`Creating pest alert for user ${userId}`);
+    // AUTHORIZATION: Only allow users with type 5.1 to create pest alerts
+    if (userType !== '5.1') {
+      console.log(`Access denied for user type: ${userType}. Only type 5.1 allowed.`);
+      return res.status(403).json({ error: 'Only main moderators (type 5.1) can create pest alerts' });
+    }
+    
+    console.log(`Creating pest alert for authorized user ${userId} (type ${userType})`);
     
     // Create the pest alert
     await PestAlertModel.createPestAlert(userId, pestName, symptoms, severity, recommendations);
     
-    // Send notifications to premium farmers (non-blocking)
-    setImmediate(async () => {
-      try {
-        // Find all premium farmers
-        const [farmers] = await pool.execute(
-          'SELECT id FROM users WHERE user_type IN (1.1, "1.1") AND premium = true'
+    // Send notifications to farmers with type 1.1 (premium/organizer farmers)
+    try {
+      console.log('📋 Starting notification process...');
+      
+      // Find all farmers with type 1.1 and active status
+      const [farmers] = await pool.execute(
+        'SELECT id, full_name FROM users WHERE user_type = ? AND is_active = 1',
+        ['1.1']
+      );
+      const farmerIds = farmers.map(f => f.id);
+
+      console.log(`📊 Found ${farmers.length} farmers with type 1.1:`, farmers.map(f => `${f.id}:${f.full_name}`));
+
+      if (farmerIds.length > 0) {
+        console.log(`📤 Creating notification for ${farmerIds.length} farmers...`);
+        
+        // Create notification in notifications table
+        const notificationId = await Notification.create(
+          'New Pest Alert',
+          `${pestName}: ${symptoms}. Severity: ${severity}`,
+          'pest_alert'
         );
-        const farmerIds = farmers.map(f => f.id);
 
-        if (farmerIds.length > 0) {
-          console.log(`Notifying ${farmerIds.length} premium farmers about new pest alert`);
-          
-          // Create notification
-          const notificationId = await Notification.create(
-            'New Pest Alert',
-            `${pestName}: ${symptoms}`,
-            'pest_alert'
-          );
+        console.log(`✅ Notification created with ID: ${notificationId}`);
 
-          // Add recipients
-          await Notification.addRecipients(notificationId, farmerIds);
+        // Add recipients to notification_recipients table
+        console.log(`📝 Adding recipients to notification_recipients table...`);
+        await Notification.addRecipients(notificationId, farmerIds);
 
-          // Real-time notify via socket
+        console.log(`✅ Notification process completed successfully!`);
+
+        // Real-time notify via socket (optional)
+        try {
           if (typeof notifyPremiumFarmers === 'function') {
             notifyPremiumFarmers(
               { 
                 id: notificationId, 
                 title: 'New Pest Alert', 
-                message: `${pestName}: ${symptoms}`, 
+                message: `${pestName}: ${symptoms}. Severity: ${severity}`, 
                 type: 'pest_alert' 
               },
               farmerIds
             );
+            console.log('🔔 Socket notification sent successfully');
+          } else {
+            console.warn('⚠️ Socket notification function not available');
           }
+        } catch (socketError) {
+          console.warn('⚠️ Socket notification failed (non-critical):', socketError.message);
         }
-      } catch (notificationError) {
-        console.warn('Failed to send notifications:', notificationError.message);
+      } else {
+        console.log('ℹ️ No farmers with type 1.1 found to notify');
       }
-    });
+    } catch (notificationError) {
+      console.error('❌ Failed to send notifications:', notificationError.message);
+      console.error('Full error:', notificationError);
+      // Don't fail the main request if notifications fail
+    }
     
-    res.status(201).json({ message: 'Pest alert created successfully' });
+    res.status(201).json({ message: 'Pest alert created successfully and notifications sent' });
   } catch (err) {
     console.error('Error creating pest alert:', err);
     res.status(500).json({ error: err.message });
