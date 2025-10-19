@@ -16,6 +16,7 @@ const cropComplaintRoutes = require('./cropComplaint');
 const cartRoutes = require('./cart');
 const driverRoutes = require('./driverRoutes');
 const cropReviewRoutes = require('./cropReviews');
+const notificationRoutes = require('./notifications');
 
 const createArticleRoutes = require('./createArticleRoutes');
 
@@ -62,6 +63,7 @@ router.use('/shopowners', shopOwnerRoutes); // <-- Register shopOwnerRoutes
 router.use('/driver', driverRoutes);
 // Register crop reviews route
 router.use('/crop-reviews', cropReviewRoutes);
+router.use('/notifications', notificationRoutes);
 
 router.use('/knowledge-articles', createArticleRoutes);
 
