@@ -34,6 +34,11 @@ exports.createShopProduct = async (req, res) => {
       }
       const shopId = shopRow.id;
 
+      // Fetch owner district to store with the product for transporter matching
+      const [ownerRows] = await connection.execute('SELECT district FROM users WHERE id = ? LIMIT 1', [userId]);
+      const ownerDistrictRaw = ownerRows && ownerRows.length ? ownerRows[0].district : null;
+      const ownerDistrict = ownerDistrictRaw ? ownerDistrictRaw.toString().trim() : null;
+
       // Resolve or create category. If no explicit category provided, fall back to product_type
       let categoryNameRaw = req.body.category === 'Other' ? req.body.category_other : req.body.category;
       if (!categoryNameRaw || !categoryNameRaw.toString().trim()) {
@@ -70,8 +75,8 @@ exports.createShopProduct = async (req, res) => {
       const imageMime = firstFile ? firstFile.mimetype : null;
 
       const [prodRes] = await connection.execute(
-        `INSERT INTO products (shop_id, product_name, brand_name, description, category_id, image, image_mime)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO products (shop_id, product_name, brand_name, description, category_id, image, image_mime, district)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           shopId,
           req.body.product_name,
@@ -79,7 +84,8 @@ exports.createShopProduct = async (req, res) => {
           req.body.product_description || null,
           categoryId || null,
           imageBuffer,
-          imageMime
+          imageMime,
+          ownerDistrict
         ]
       );
 

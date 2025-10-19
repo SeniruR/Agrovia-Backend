@@ -10,7 +10,6 @@ const http = require('http');
 const { initSocket } = require('./socket');
 
 // Import middleware
-const { generalLimiter } = require('./middleware/rateLimiter');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 // Import database
@@ -50,19 +49,6 @@ app.options('*', cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
 }));
 
-// Rate limiting
-if (process.env.NODE_ENV === 'development') {
-  // No-op rate limiting in dev
-  app.use((req, res, next) => next());
-} else {
-  // In production/staging apply the general limiter but still skip sensitive profile endpoints
-  app.use((req, res, next) => {
-    const skipPaths = ['/api/v1/users/profile', '/api/v1/auth/profile'];
-    if (skipPaths.includes(req.path)) return next();
-    return generalLimiter(req, res, next);
-  });
-}
-
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -79,10 +65,23 @@ app.use('/uploads/crop-images', cors(), express.static(path.join(__dirname, 'upl
   }
 }));
 
-// API routes
+// Serve review attachments specifically
+app.use('/uploads/reviews', cors(), express.static(path.join(__dirname, 'uploads/reviews'), {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Content-Type', mimeTypes.lookup(filePath) || 'application/octet-stream');
+  }
+}));
+
+const shopProductRoutes = require('./routes/shopProductRoutes');
+const shopStatsRoutes = require('./routes/shopStats');
+// Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
+const transportAllocationRoutes = require('./routes/TransportRoutes');
+const createArticleRoutes = require('./routes/createArticleRoutes');
 app.use('/api/transport-allocations', transportAllocationRoutes);
 app.use('/api/v1/shop-products', shopProductRoutes);
 app.use('/api/v1/shop', shopStatsRoutes);
+app.use('/api/v1/knowledge-articles', createArticleRoutes);
+// API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/admin', adminRoutes);

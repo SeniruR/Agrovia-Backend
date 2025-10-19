@@ -1,6 +1,14 @@
 const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
+let FileType;
+try {
+  FileType = require('file-type');
+} catch (e) {
+  FileType = null;
+  console.warn('Optional package "file-type" not installed; attachment MIME detection will use filename extension fallback');
+}
+const mimeTypes = require('mime-types');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 
@@ -35,6 +43,7 @@ const upload = multer({
     cb(null, true);
   }
 }).array('attachments', 5); // Allow up to 5 files with field name 'attachments'
+
 
 /**
  * Get all reviews for a specific crop
