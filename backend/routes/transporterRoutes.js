@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/upload');
-const { registerTransporter, getAllTransporters } = require('../controllers/transporterController');
+const { registerTransporter, getAllTransporters, getTransporterById, updateTransporterPricing } = require('../controllers/transporterController');
 const { authLimiter } = require('../middleware/rateLimiter');
 // You can add validation middleware if you create a Joi schema for transporter
 const { pool } = require('../config/database');
@@ -119,6 +119,8 @@ router.post('/register/transporter',
   registerTransporter
 );
 
+router.patch('/:id/pricing', updateTransporterPricing);
+
 
 
 
@@ -186,6 +188,8 @@ router.get('/accounts', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch transporter accounts' });
   }
 });
+
+router.get('/:id', getTransporterById);
 
 router.get('/', getAllTransporters);
 

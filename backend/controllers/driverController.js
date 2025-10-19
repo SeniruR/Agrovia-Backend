@@ -14,25 +14,53 @@ exports.getDeliveriesForTransporter = async (req, res) => {
         ot.id AS order_transport_id,
         ot.order_item_id,
         oi.id AS order_item_id,
-        oi.productName, oi.quantity, oi.productUnit, oi.status,
-        o.id AS order_id, o.orderId AS externalOrderId,
-        o.deliveryName, o.deliveryPhone, o.deliveryAddress, o.deliveryDistrict,
-  cp.location AS pickupLocation, cp.district AS pickupDistrict,
-  u_farmer.full_name AS farmerName, u_farmer.phone_number AS farmerPhone,
-  u_buyer.full_name AS buyerName, u_buyer.phone_number AS buyerPhone,
-  -- coordinates: prefer values stored on order_transports (copied from allocation), fall back to user/crop posts
-  ot.item_latitude AS ot_item_latitude, ot.item_longitude AS ot_item_longitude,
-  ot.user_latitude AS ot_user_latitude, ot.user_longitude AS ot_user_longitude,
-  u_farmer.latitude AS farmer_latitude, u_farmer.longitude AS farmer_longitude,
-  u_buyer.latitude AS buyer_latitude, u_buyer.longitude AS buyer_longitude,
-        td.id AS transporter_detail_id, td.user_id AS transporter_user_id,
-        ot.transport_cost, ot.calculated_distance, ot.vehicle_type, ot.vehicle_number,
+        oi.productName,
+        oi.quantity,
+        oi.productUnit,
+        oi.status,
+        oi.product_type AS productType,
+        o.id AS order_id,
+        o.orderId AS externalOrderId,
+        o.deliveryName,
+        o.deliveryPhone,
+        o.deliveryAddress,
+        o.deliveryDistrict,
+        cp.location AS pickupLocation,
+        cp.district AS pickupDistrict,
+        u_farmer.full_name AS farmerName,
+        u_farmer.phone_number AS farmerPhone,
+        sd.shop_name AS shopName,
+        sd.shop_phone_number AS shopPhone,
+        sd.shop_address AS shopAddress,
+        sd.latitude AS shopLatitude,
+        sd.longitude AS shopLongitude,
+        sd.delivery_areas AS shopDeliveryAreas,
+        u_shop.full_name AS shopOwnerName,
+        u_shop.phone_number AS shopOwnerPhone,
+        -- coordinates: prefer values stored on order_transports (copied from allocation), fall back to user/crop posts or shop details
+        ot.item_latitude AS ot_item_latitude,
+        ot.item_longitude AS ot_item_longitude,
+        ot.user_latitude AS ot_user_latitude,
+        ot.user_longitude AS ot_user_longitude,
+        u_farmer.latitude AS farmer_latitude,
+        u_farmer.longitude AS farmer_longitude,
+        u_buyer.latitude AS buyer_latitude,
+        u_buyer.longitude AS buyer_longitude,
+        td.id AS transporter_detail_id,
+        td.user_id AS transporter_user_id,
+        ot.transport_cost,
+        ot.calculated_distance,
+        ot.vehicle_type,
+        ot.vehicle_number,
         o.createdAt
       FROM order_transports ot
       JOIN order_items oi ON oi.id = ot.order_item_id
       JOIN orders o ON o.id = oi.orderId
       LEFT JOIN crop_posts cp ON cp.id = oi.productId
       LEFT JOIN users u_farmer ON cp.farmer_id = u_farmer.id
+      LEFT JOIN products p ON p.id = oi.productId
+      LEFT JOIN shop_details sd ON sd.id = p.shop_id
+      LEFT JOIN users u_shop ON sd.user_id = u_shop.id
       LEFT JOIN users u_buyer ON o.userId = u_buyer.id
       LEFT JOIN transporter_details td ON (td.id = ot.transporter_id OR td.id = ot.transport_id)
       WHERE td.user_id = ?
@@ -55,42 +83,77 @@ exports.getDeliveriesForTransporter = async (req, res) => {
       return 'pending';
     };
 
-  const deliveries = rows.map(r => ({
-      id: r.order_transport_id,
-      orderItemId: r.order_item_id,
-      orderId: r.order_id,
-      externalOrderId: r.externalOrderId,
-      // normalize to 'pending' | 'in-progress' | 'completed'
-      status: normalizeStatus(r.status),
-      productName: r.productName,
-      quantity: r.quantity,
-      productUnit: r.productUnit,
-      pickupLocation: r.pickupLocation,
-      pickupDistrict: r.pickupDistrict,
-      farmerName: r.farmerName,
-      farmerPhone: r.farmerPhone,
-  // Latitude/Longitude: prefer order_transports item coordinates for farmer (pickup), and user coordinates for buyer
-  farmerLatitude: r.ot_item_latitude || r.farmer_latitude || null,
-  farmerLongitude: r.ot_item_longitude || r.farmer_longitude || null,
-  buyerLatitude: r.ot_user_latitude || r.buyer_latitude || null,
-  buyerLongitude: r.ot_user_longitude || r.buyer_longitude || null,
-  buyerName: r.deliveryName || r.buyerName,
-  buyerPhone: r.deliveryPhone || r.buyerPhone,
-  // map order delivery address to deliveryLocation so frontend can show it
-  deliveryLocation: r.deliveryAddress || null,
-  // If the order doesn't have scheduled date/time fields, fall back to createdAt
-  scheduledDate: r.scheduledDate || (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : null),
-  scheduledTime: r.scheduledTime || (r.createdAt ? new Date(r.createdAt).toLocaleTimeString() : null),
-      transport_cost: r.transport_cost,
-      calculated_distance: r.calculated_distance,
-      vehicle_type: r.vehicle_type,
-      vehicle_number: r.vehicle_number,
-      transporterDetailId: r.transporter_detail_id,
-      // expose transporterId so frontend can compare with user.id
-      transporterId: r.transporter_user_id,
-      transporterUserId: r.transporter_user_id,
-      createdAt: r.createdAt
-    }));
+    const deliveries = rows.map((r) => {
+      const productType = (r.productType || 'crop').toLowerCase();
+      const isShop = productType === 'shop';
+
+      const pickupLocation = isShop
+        ? (r.shopAddress || r.shopName || r.pickupLocation || null)
+        : (r.pickupLocation || r.shopAddress || null);
+
+      const pickupDistrict = isShop
+        ? (r.shopDeliveryAreas || r.deliveryDistrict || null)
+        : (r.pickupDistrict || r.shopDeliveryAreas || null);
+
+      const pickupLatitude = r.ot_item_latitude
+        || (isShop ? r.shopLatitude : r.farmer_latitude)
+        || null;
+
+      const pickupLongitude = r.ot_item_longitude
+        || (isShop ? r.shopLongitude : r.farmer_longitude)
+        || null;
+
+      const contactName = isShop
+        ? (r.shopName || r.shopOwnerName || null)
+        : (r.farmerName || null);
+
+      const contactPhone = isShop
+        ? (r.shopPhone || r.shopOwnerPhone || null)
+        : (r.farmerPhone || null);
+
+      return {
+        id: r.order_transport_id,
+        orderItemId: r.order_item_id,
+        orderId: r.order_id,
+        externalOrderId: r.externalOrderId,
+        status: normalizeStatus(r.status),
+        productName: r.productName,
+        quantity: r.quantity,
+        productUnit: r.productUnit,
+        productType,
+        pickupLocation,
+        pickupDistrict,
+        pickupLatitude,
+        pickupLongitude,
+        farmerName: contactName,
+        farmerPhone: contactPhone,
+        farmerLatitude: pickupLatitude,
+        farmerLongitude: pickupLongitude,
+        buyerLatitude: r.ot_user_latitude || r.buyer_latitude || null,
+        buyerLongitude: r.ot_user_longitude || r.buyer_longitude || null,
+        buyerName: r.deliveryName || r.buyerName,
+  buyerAddress: r.deliveryAddress || null,
+        buyerPhone: r.deliveryPhone || r.buyerPhone,
+        deliveryLocation: r.deliveryAddress || null,
+        scheduledDate: r.scheduledDate || (r.createdAt ? new Date(r.createdAt).toLocaleDateString() : null),
+        scheduledTime: r.scheduledTime || (r.createdAt ? new Date(r.createdAt).toLocaleTimeString() : null),
+        transport_cost: r.transport_cost,
+        calculated_distance: r.calculated_distance,
+        vehicle_type: r.vehicle_type,
+        vehicle_number: r.vehicle_number,
+        transporterDetailId: r.transporter_detail_id,
+        transporterId: r.transporter_user_id,
+        transporterUserId: r.transporter_user_id,
+        shopName: r.shopName || null,
+        shopPhone: r.shopPhone || r.shopOwnerPhone || null,
+        shopAddress: r.shopAddress || null,
+        shopLatitude: r.shopLatitude || null,
+        shopLongitude: r.shopLongitude || null,
+        shopOwnerName: r.shopOwnerName || null,
+        shopOwnerPhone: r.shopOwnerPhone || null,
+        createdAt: r.createdAt
+      };
+    });
 
     return res.json({ success: true, data: deliveries });
   } catch (err) {
