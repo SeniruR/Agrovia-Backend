@@ -290,38 +290,53 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/v1/orders/shop/orders (fetch orders that include products from the authenticated shop owner)
+// GET /api/v1/orders/shop/orders (fetch orders containing products owned by the authenticated shop owner)
 router.get('/shop/orders', authenticate, async (req, res) => {
   try {
-    const shopOwnerUserId = req.user.id;
+    const shopOwnerId = req.user.id;
 
-    // Find products that belong to shops owned by this user
-    const [productRows] = await db.execute(
-      `SELECT p.id
-       FROM products p
-       INNER JOIN shop_details sd ON sd.id = p.shop_id
-       WHERE sd.user_id = ?`,
-      [shopOwnerUserId]
+    // Resolve shop IDs associated with this owner
+    const [shopRows] = await db.execute(
+      `SELECT id FROM shop_details WHERE user_id = ?`,
+      [shopOwnerId]
     );
 
-    const productIds = productRows.map(r => r.id);
-    if (productIds.length === 0) return res.json({ success: true, data: [] });
+    if (!shopRows || shopRows.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
 
-    const productPlaceholders = productIds.map(() => '?').join(',');
+    const shopIds = shopRows.map((row) => row.id);
+    const shopPlaceholders = shopIds.map(() => '?').join(',');
 
-    // Find order_items that reference these shop products
+    // Fetch order items where the products belong to the owner's shops
     const [matchingItems] = await db.execute(
-      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage, status
-       FROM order_items WHERE productId IN (${productPlaceholders})`,
-      productIds
+      `SELECT oi.id, oi.orderId, oi.productId, oi.productName, oi.quantity, oi.unitPrice, oi.subtotal,
+              oi.productUnit, oi.farmerName, oi.location, oi.productImage, oi.status,
+              o.orderId AS externalOrderId, o.status AS orderStatus, o.totalAmount, o.currency, o.createdAt,
+              o.deliveryName, o.deliveryPhone, o.deliveryAddress, o.deliveryDistrict,
+              o.userId AS buyerId,
+              buyer.full_name AS buyerName,
+              buyer.phone_number AS buyerPhone,
+              buyer.email AS buyerEmail,
+              p.id AS canonicalProductId,
+              p.shop_id AS canonicalShopId
+       FROM order_items oi
+       INNER JOIN orders o ON o.id = oi.orderId
+       INNER JOIN products p ON p.id = oi.productId
+       INNER JOIN shop_details sd ON sd.id = p.shop_id
+       LEFT JOIN users buyer ON buyer.id = o.userId
+       WHERE sd.id IN (${shopPlaceholders})
+       ORDER BY o.createdAt DESC`,
+      shopIds
     );
 
-    if (matchingItems.length === 0) return res.json({ success: true, data: [] });
+    if (!matchingItems || matchingItems.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
 
-    const orderIds = Array.from(new Set(matchingItems.map(i => i.orderId)));
+    const orderIds = Array.from(new Set(matchingItems.map((item) => item.orderId)));
     const orderPlaceholders = orderIds.map(() => '?').join(',');
 
-    // Fetch orders (include delivery fields)
     const [orders] = await db.execute(
       `SELECT id, orderId AS externalOrderId, status, totalAmount, currency, createdAt,
               deliveryName, deliveryPhone, deliveryAddress, deliveryDistrict
@@ -329,57 +344,46 @@ router.get('/shop/orders', authenticate, async (req, res) => {
       orderIds
     );
 
-    // Fetch transports for the relevant items
-    const itemIds = matchingItems.map(i => i.id);
-    const itemPlaceholders = itemIds.map(() => '?').join(',') || 'NULL';
-    const [transports] = await db.execute(
+    const itemIds = matchingItems.map((item) => item.id);
+    const itemPlaceholders = itemIds.map(() => '?').join(',');
+
+    const [transports] = itemIds.length > 0 ? await db.execute(
       `SELECT ot.*, td.user_id as transporter_user_id, u.full_name as transporter_name, u.phone_number as transporter_phone
        FROM order_transports ot
        LEFT JOIN transporter_details td ON td.id = ot.transporter_id
        LEFT JOIN users u ON td.user_id = u.id
        WHERE ot.order_item_id IN (${itemPlaceholders})`,
       itemIds
-    );
+    ) : [[]];
 
-    // Build product metadata map (merge crop_posts and products meta for completeness)
+    const productIds = matchingItems.map((item) => item.canonicalProductId).filter(Boolean);
+    const productPlaceholders = productIds.length > 0 ? productIds.map(() => '?').join(',') : null;
     const productMetaMap = {};
-    if (productIds.length > 0) {
-      // From crop_posts
-      const [cropRows] = await db.execute(
-        `SELECT cp.id, cp.location, cp.district, cp.farmer_id, u.full_name as farmer_name, u.phone_number as farmer_phone
-         FROM crop_posts cp
-         LEFT JOIN users u ON cp.farmer_id = u.id
-         WHERE cp.id IN (${productPlaceholders})`,
-        productIds
-      );
-      for (const row of cropRows) {
-        productMetaMap[row.id] = {
-          ...(productMetaMap[row.id] || {}),
-          location: row.location,
-          district: row.district,
-          farmer_id: row.farmer_id,
-          farmer_name: row.farmer_name,
-          farmer_phone: row.farmer_phone
-        };
-      }
 
-      // From products -> shop_details
-      const [shopRows] = await db.execute(
-        `SELECT p.id, sd.user_id AS shop_owner_id
+    if (productIds.length > 0) {
+      const [productRows] = await db.execute(
+        `SELECT p.id, sd.shop_name, sd.shop_phone_number, sd.shop_email,
+                inv.quantity AS inventory_quantity, inv.unit_price AS inventory_unit_price,
+                inv.unit_type AS inventory_unit_type
          FROM products p
          LEFT JOIN shop_details sd ON sd.id = p.shop_id
+         LEFT JOIN product_inventory inv ON inv.product_id = p.id
          WHERE p.id IN (${productPlaceholders})`,
         productIds
       );
-      for (const row of shopRows) {
+
+      for (const row of productRows) {
         productMetaMap[row.id] = {
-          ...(productMetaMap[row.id] || {}),
-          shop_owner_id: row.shop_owner_id
+          shop_name: row.shop_name,
+          shop_phone_number: row.shop_phone_number,
+          shop_email: row.shop_email,
+          inventory_quantity: row.inventory_quantity,
+          inventory_unit_price: row.inventory_unit_price,
+          inventory_unit_type: row.inventory_unit_type
         };
       }
     }
 
-    // Group transports by order_item_id
     const transportsByItem = {};
     for (const t of transports || []) {
       transportsByItem[t.order_item_id] = transportsByItem[t.order_item_id] || [];
@@ -396,42 +400,43 @@ router.get('/shop/orders', authenticate, async (req, res) => {
       return 'pending';
     };
 
-    const itemsWithTransports = matchingItems.map(item => {
+    const itemsWithTransports = matchingItems.map((item) => {
+      const meta = productMetaMap[item.canonicalProductId] || {};
       const itemTransports = transportsByItem[item.id] || [];
-      const primaryTransport = itemTransports && itemTransports.length > 0 ? itemTransports[0] : null;
+      const primaryTransport = itemTransports.length > 0 ? itemTransports[0] : null;
       const transportRawStatus = primaryTransport ? (primaryTransport.status || primaryTransport.transport_status || primaryTransport.order_transport_status || primaryTransport.delivery_status || primaryTransport.transporter_status) : null;
       const finalRaw = item.status || transportRawStatus || null;
       const finalStatus = canonicalizeStatus(finalRaw);
-      const meta = productMetaMap[item.productId] || {};
+
       return {
         ...item,
         status: finalStatus,
         transports: itemTransports,
         _transport_raw_status: transportRawStatus,
-        productLocation: meta.location || item.location || null,
-        productDistrict: meta.district || null,
-        productFarmerName: item.farmerName || meta.farmer_name || null,
-        productFarmerPhone: meta.farmer_phone || null,
-        productFarmerId: meta.farmer_id || null,
-        productShopOwnerId: meta.shop_owner_id || null
+        shopName: meta.shop_name || null,
+        shopPhone: meta.shop_phone_number || null,
+        shopEmail: meta.shop_email || null,
+        inventoryQuantity: meta.inventory_quantity,
+        inventoryUnitPrice: meta.inventory_unit_price,
+        inventoryUnitType: meta.inventory_unit_type
       };
     });
 
     const itemsByOrder = {};
-    itemsWithTransports.forEach(item => {
+    itemsWithTransports.forEach((item) => {
       if (!itemsByOrder[item.orderId]) itemsByOrder[item.orderId] = [];
       itemsByOrder[item.orderId].push(item);
     });
 
-    const ordersWithProducts = orders.map(order => ({
+    const ordersWithProducts = orders.map((order) => ({
       ...order,
       products: itemsByOrder[order.id] || []
     }));
 
     return res.json({ success: true, data: ordersWithProducts });
   } catch (err) {
-    console.error('Error fetching shop owner orders:', err);
-    res.status(500).json({ success: false, message: 'Failed to fetch shop owner orders', error: err.message });
+    console.error('Error fetching shop orders:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch shop orders', error: err.message });
   }
 });
 

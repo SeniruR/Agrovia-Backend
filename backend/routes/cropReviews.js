@@ -36,7 +36,7 @@ router.get('/:id', cropReviewController.getReviewById);
 // POST /api/v1/crop-reviews - Add a new review
 router.post(
   '/',
-  upload.array('attachments', 5),
+  upload.array('attachments', 1),
   cropReviewController.addReview
 );
 
@@ -49,7 +49,7 @@ router.get('/:reviewId/attachment', (req, res, next) => {
 // PUT /api/v1/crop-reviews/:reviewId - Update a review
 router.put(
   '/:reviewId',
-  upload.array('attachments', 5),
+  upload.array('attachments', 1),
   cropReviewController.updateReview
 );
 

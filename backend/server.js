@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
 
 const helmet = require('helmet');
 const path = require('path');
@@ -24,9 +25,12 @@ const orderRoutes = require('./routes/orders');
 
 // Import admin routes
 const adminRoutes = require('./routes/adminRoutes');
+const { initSocket } = require('./utils/socket');
+const registerCropChatSocket = require('./sockets/cropChat');
 
 // Create Express app
 const app = express();
+const httpServer = http.createServer(app);
 
 // CORS configuration - Allow access from all origins in development
 const corsOptions = {
@@ -52,6 +56,12 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id', 'x-user-id']
 };
+
+const io = initSocket(httpServer, {
+  origin: corsOptions.origin,
+  credentials: true
+});
+registerCropChatSocket(io);
 
 app.use(cors(corsOptions));
 
@@ -150,6 +160,9 @@ app.use('/api/v1/admin', adminRoutes);
 const shopReviewsRoutes = require('./routes/shopReviewsRoutes');
 app.use('/api/v1/shop-reviews', shopReviewsRoutes);
 
+// Pest alert routes
+const pestAlertRoutes = require('./routes/pestAlert.routes');
+app.use('/api', pestAlertRoutes);
 // File upload routes
 const uploadRoutes = require('./routes/uploadRoutes');
 app.use('/api/v1/upload', uploadRoutes);
@@ -227,13 +240,14 @@ const startServer = async () => {
     }
 
     // Start the server
-    app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`
 🚀 Agrovia Backend Server Started
 📍 Environment: ${process.env.NODE_ENV || 'development'}
 🌐 Server: http://localhost:${PORT}
 🔗 API Base: http://localhost:${PORT}/api/v1
 📊 Health Check: http://localhost:${PORT}/api/v1/health
+🔗 Socket.IO: http://localhost:${PORT}/api/v1/socket.io
       `);
     });
   } catch (error) {

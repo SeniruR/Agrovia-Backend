@@ -170,6 +170,25 @@ const createTables = async (connection) => {
       }
     }
 
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS crop_chats (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        crop_id BIGINT UNSIGNED NOT NULL,
+        farmer_id BIGINT UNSIGNED NOT NULL,
+        buyer_id BIGINT UNSIGNED NOT NULL,
+        sender_id BIGINT UNSIGNED NOT NULL,
+        message TEXT NOT NULL,
+        client_message_id VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_crop_chats_room (crop_id, farmer_id, buyer_id, created_at),
+        INDEX idx_crop_chats_sender (sender_id, created_at),
+        CONSTRAINT fk_crop_chats_crop FOREIGN KEY (crop_id) REFERENCES crop_posts(id) ON DELETE CASCADE,
+        CONSTRAINT fk_crop_chats_farmer FOREIGN KEY (farmer_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_crop_chats_buyer FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+        CONSTRAINT fk_crop_chats_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
 
 
     console.log('✅ Database tables created/verified successfully');
