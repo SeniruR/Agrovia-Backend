@@ -145,10 +145,12 @@ const shopProductRoutes = require('./routes/shopProductRoutes');
 const shopStatsRoutes = require('./routes/shopStats');
 // Use the correct route file name (TransportRoutes.js) instead of non-existent transportAllocationRoutes
 const transportAllocationRoutes = require('./routes/TransportRoutes');
+const createArticleRoutes = require('./routes/createArticleRoutes');
 app.use('/api/transport-allocations', transportAllocationRoutes);
 
 app.use('/api/v1/shop-products', shopProductRoutes);
 app.use('/api/v1/shop', shopStatsRoutes);
+app.use('/api/v1/knowledge-articles', createArticleRoutes);
 // API routes
 app.use('/api/v1', routes);
 app.use('/api/v1/orders', orderRoutes);
