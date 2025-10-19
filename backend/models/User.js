@@ -175,6 +175,12 @@ class User {
     await pool.execute(query, [is_active, id]);
   }
 
+  static async updatePassword(id, passwordHash) {
+    const query = 'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+    const [result] = await pool.execute(query, [passwordHash, id]);
+    return result;
+  }
+
   // Delete user
   static async delete(id) {
     const query = 'DELETE FROM users WHERE id = ?';

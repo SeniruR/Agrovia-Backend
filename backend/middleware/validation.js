@@ -41,6 +41,21 @@ const loginSchema = Joi.object({
   password: Joi.string().min(1).required()
 });
 
+const forgotPasswordRequestSchema = Joi.object({
+  email: Joi.string().email().required()
+});
+
+const forgotPasswordVerifySchema = Joi.object({
+  email: Joi.string().email().required(),
+  code: Joi.string().trim().pattern(/^[0-9]{6}$/).required()
+});
+
+const forgotPasswordResetSchema = Joi.object({
+  email: Joi.string().email().required(),
+  resetToken: Joi.string().trim().min(20).required(),
+  password: Joi.string().min(8).max(128).required()
+});
+
 // Organization validation schema
 const organizationSchema = Joi.object({
   name: Joi.string().min(2).max(255).required(),
@@ -236,6 +251,9 @@ module.exports = {
   registerCommitteeMemberSchema,
   registerBuyerSchema,
   loginSchema,
+  forgotPasswordRequestSchema,
+  forgotPasswordVerifySchema,
+  forgotPasswordResetSchema,
   organizationSchema,
   validate,
   createCropPostSchema,

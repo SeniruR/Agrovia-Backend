@@ -1,7 +1,16 @@
 const express = require('express');
 const { upload, uploadMemory, uploadProfileImage } = require('../config/upload');
 const { authLimiter } = require('../middleware/rateLimiter');
-const { validate, registerFarmerSchema, registerCommitteeMemberSchema, registerBuyerSchema, loginSchema } = require('../middleware/validation');
+const {
+  validate,
+  registerFarmerSchema,
+  registerCommitteeMemberSchema,
+  registerBuyerSchema,
+  loginSchema,
+  forgotPasswordRequestSchema,
+  forgotPasswordVerifySchema,
+  forgotPasswordResetSchema
+} = require('../middleware/validation');
 const { authenticate, authorize } = require('../middleware/auth');
 const {
   registerFarmer,
@@ -15,6 +24,11 @@ const {
 } = require('../controllers/authController');
 const { registerTransporter } = require('../controllers/transporterController');
 const { registerModerator } = require('../controllers/moderatorController');
+const {
+  requestPasswordReset,
+  verifyResetCode,
+  resetPassword
+} = require('../controllers/passwordResetController');
 
 const router = express.Router();
 
@@ -70,6 +84,24 @@ router.post('/login',
   authLimiter,
   validate(loginSchema),
   login
+);
+
+router.post('/forgot-password/request',
+  authLimiter,
+  validate(forgotPasswordRequestSchema),
+  requestPasswordReset
+);
+
+router.post('/forgot-password/verify',
+  authLimiter,
+  validate(forgotPasswordVerifySchema),
+  verifyResetCode
+);
+
+router.post('/forgot-password/reset',
+  authLimiter,
+  validate(forgotPasswordResetSchema),
+  resetPassword
 );
 
 // Transporter registration: must handle file upload before validation (images only, memory)
