@@ -17,6 +17,8 @@ const verifyToken = (token) => {
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    console.log('Auth header received:', authHeader ? authHeader.substring(0, 20) + '...' : 'No auth header');
+    
     // Support both 'Authorization' and 'authorization' headers, and allow token in query for dev
     let token = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -28,23 +30,29 @@ const authenticate = async (req, res, next) => {
     }
 
     if (!token) {
+      console.log('No token found in request');
       return res.status(401).json({
         success: false,
         message: 'Access token is required'
       });
     }
 
+    console.log('Token found, attempting to verify...');
     try {
       const decoded = verifyToken(token);
+      console.log('Token decoded successfully:', { userId: decoded.userId });
+      
       // Get user from database
       const user = await User.findById(decoded.userId);
       if (!user) {
+        console.log('User not found for ID:', decoded.userId);
         return res.status(401).json({
           success: false,
           message: 'Invalid token - user not found'
         });
       }
       if (!user.is_active) {
+        console.log('User account is deactivated:', decoded.userId);
         return res.status(401).json({
           success: false,
           message: 'Account is deactivated'
@@ -64,8 +72,10 @@ const authenticate = async (req, res, next) => {
   };
       user.role = userTypeMap[user.user_type?.toString()] || 'unknown';
       req.user = user;
+      console.log('Authentication successful for user:', user.id);
       next();
     } catch (tokenError) {
+      console.log('Token verification failed:', tokenError.message);
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token'
