@@ -28,7 +28,33 @@ router.post('/', authenticate, async (req, res) => {
   });
   try {
     const userId = req.user.id;
-    const { productId, quantity, productName, priceAtAddTime, productUnit, farmerName, location, productImage, district, productType } = req.body;
+    const {
+      productId,
+      quantity,
+      productName,
+      priceAtAddTime,
+      productUnit,
+      farmerName,
+      location,
+      productImage,
+      district,
+      productType,
+      latitude,
+      longitude
+    } = req.body;
+
+    const hasLatitude = Object.prototype.hasOwnProperty.call(req.body, 'latitude');
+    const hasLongitude = Object.prototype.hasOwnProperty.call(req.body, 'longitude');
+
+    const normalizeCoordinate = (value) => {
+      if (value === undefined) return undefined;
+      if (value === null || value === '') return null;
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+
+    const normalizedLatitude = normalizeCoordinate(latitude);
+    const normalizedLongitude = normalizeCoordinate(longitude);
 
     console.log('📋 Processing cart addition:', {
       userId,
@@ -38,7 +64,9 @@ router.post('/', authenticate, async (req, res) => {
       farmerName,
       location,
       district,
-      productType
+      productType,
+      latitude: normalizedLatitude,
+      longitude: normalizedLongitude
     });
 
     // Check if the item already exists in the cart (considering both productId and productType)
@@ -52,9 +80,11 @@ router.post('/', authenticate, async (req, res) => {
       console.log('🔄 Updating existing cart item');
       const existingItem = existingRows[0];
       const newQuantity = existingItem.quantity + quantity;
+      const updatedLatitude = hasLatitude ? normalizedLatitude : existingItem.latitude;
+      const updatedLongitude = hasLongitude ? normalizedLongitude : existingItem.longitude;
       await pool.execute(
-        `UPDATE carts SET quantity = ?, priceAtAddTime = ?, updatedAt = NOW() WHERE id = ?`,
-        [newQuantity, priceAtAddTime, existingItem.id]
+        `UPDATE carts SET quantity = ?, priceAtAddTime = ?, latitude = ?, longitude = ?, updatedAt = NOW() WHERE id = ?`,
+        [newQuantity, priceAtAddTime, updatedLatitude, updatedLongitude, existingItem.id]
       );
       console.log('✅ Cart item updated successfully');
       res.status(200).json({ success: true, message: 'Cart item updated' });
@@ -62,10 +92,27 @@ router.post('/', authenticate, async (req, res) => {
       // Insert new item - productImage can now be LONGTEXT to handle base64 data URLs
       console.log('➕ Adding new cart item');
       
+      const insertLatitude = hasLatitude ? normalizedLatitude : null;
+      const insertLongitude = hasLongitude ? normalizedLongitude : null;
+
       const insertResult = await pool.execute(
-        `INSERT INTO carts (userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage, district, productType, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-        [userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage, district, productType || 'crop']
+        `INSERT INTO carts (userId, productId, quantity, priceAtAddTime, productName, productUnit, farmerName, location, productImage, district, productType, latitude, longitude, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          userId,
+          productId,
+          quantity,
+          priceAtAddTime,
+          productName,
+          productUnit,
+          farmerName,
+          location,
+          productImage,
+          district,
+          productType || 'crop',
+          insertLatitude,
+          insertLongitude
+        ]
       );
       console.log('✅ New cart item added successfully:', insertResult[0]);
       res.status(201).json({ success: true, message: 'Item added to cart' });
@@ -154,12 +201,12 @@ router.get("/:productId/coordinates", async (req, res) => {
   try {
     const coords = await getFarmerCoordinates(req.params.productId);
     if (!coords) {
-      return res.status(404).json({ error: "Product not found" });
+      return res.status(404).json({ success: false, message: "Coordinates not found for product" });
     }
-    res.json(coords);
+    res.json({ success: true, data: coords });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("Error fetching product coordinates:", err);
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
   }
 });
 

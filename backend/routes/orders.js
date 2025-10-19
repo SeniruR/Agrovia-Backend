@@ -24,7 +24,8 @@ router.get('/', authenticate, async (req, res) => {
     }
     const placeholders = orderIds.map(() => '?').join(',');
     const [items] = await db.execute(
-      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage, status
+      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit,
+              farmerName, location, productImage, status, product_type AS productType
        FROM order_items WHERE orderId IN (${placeholders})`,
       orderIds
     );
@@ -68,7 +69,14 @@ router.get('/', authenticate, async (req, res) => {
 
       // Metadata from shop products (shop owner linkage)
       const [shopRows] = await db.execute(
-        `SELECT p.id, sd.user_id AS shop_owner_id
+        `SELECT p.id,
+                sd.user_id AS shop_owner_id,
+                sd.shop_name AS shop_name,
+                sd.shop_phone_number AS shop_phone_number,
+                sd.shop_address AS shop_address,
+                sd.latitude AS shop_latitude,
+                sd.longitude AS shop_longitude,
+                sd.delivery_areas AS shop_delivery_areas
          FROM products p
          LEFT JOIN shop_details sd ON sd.id = p.shop_id
          WHERE p.id IN (${productPlaceholders})`,
@@ -77,7 +85,13 @@ router.get('/', authenticate, async (req, res) => {
       for (const row of shopRows) {
         productMetaMap[row.id] = {
           ...(productMetaMap[row.id] || {}),
-          shop_owner_id: row.shop_owner_id
+          shop_owner_id: row.shop_owner_id,
+          shop_name: row.shop_name,
+          shop_phone_number: row.shop_phone_number,
+          shop_address: row.shop_address,
+          shop_latitude: row.shop_latitude,
+          shop_longitude: row.shop_longitude,
+          shop_delivery_areas: row.shop_delivery_areas
         };
       }
     }
@@ -123,7 +137,13 @@ router.get('/', authenticate, async (req, res) => {
         productFarmerName: item.farmerName || meta.farmer_name || null,
         productFarmerPhone: meta.farmer_phone || null,
         productFarmerId: meta.farmer_id || null,
-        productShopOwnerId: meta.shop_owner_id || null
+        productShopOwnerId: meta.shop_owner_id || null,
+        productShopName: meta.shop_name || null,
+        productShopPhone: meta.shop_phone_number || null,
+        productShopAddress: meta.shop_address || null,
+        productShopLatitude: meta.shop_latitude || null,
+        productShopLongitude: meta.shop_longitude || null,
+        productShopDeliveryAreas: meta.shop_delivery_areas || null
       };
     });
 
@@ -163,7 +183,8 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
     // Find order_items that reference these products
     const productPlaceholders = productIds.map(() => '?').join(',');
     const [matchingItems] = await db.execute(
-      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit, farmerName, location, productImage, status
+      `SELECT id, orderId, productId, productName, quantity, unitPrice, subtotal, productUnit,
+              farmerName, location, productImage, status, product_type AS productType
        FROM order_items WHERE productId IN (${productPlaceholders})`,
       productIds
     );
@@ -215,7 +236,14 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
       }
 
       const [shopRows] = await db.execute(
-        `SELECT p.id, sd.user_id AS shop_owner_id
+        `SELECT p.id,
+                sd.user_id AS shop_owner_id,
+                sd.shop_name AS shop_name,
+                sd.shop_phone_number AS shop_phone_number,
+                sd.shop_address AS shop_address,
+                sd.latitude AS shop_latitude,
+                sd.longitude AS shop_longitude,
+                sd.delivery_areas AS shop_delivery_areas
          FROM products p
          LEFT JOIN shop_details sd ON sd.id = p.shop_id
          WHERE p.id IN (${productPlaceholders})`,
@@ -224,7 +252,13 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
       for (const row of shopRows) {
         productMetaMap[row.id] = {
           ...(productMetaMap[row.id] || {}),
-          shop_owner_id: row.shop_owner_id
+          shop_owner_id: row.shop_owner_id,
+          shop_name: row.shop_name,
+          shop_phone_number: row.shop_phone_number,
+          shop_address: row.shop_address,
+          shop_latitude: row.shop_latitude,
+          shop_longitude: row.shop_longitude,
+          shop_delivery_areas: row.shop_delivery_areas
         };
       }
     }
@@ -266,7 +300,13 @@ router.get('/farmer/orders', authenticate, async (req, res) => {
         productFarmerName: item.farmerName || meta.farmer_name || null,
         productFarmerPhone: meta.farmer_phone || null,
         productFarmerId: meta.farmer_id || null,
-        productShopOwnerId: meta.shop_owner_id || null
+        productShopOwnerId: meta.shop_owner_id || null,
+        productShopName: meta.shop_name || null,
+        productShopPhone: meta.shop_phone_number || null,
+        productShopAddress: meta.shop_address || null,
+        productShopLatitude: meta.shop_latitude || null,
+        productShopLongitude: meta.shop_longitude || null,
+        productShopDeliveryAreas: meta.shop_delivery_areas || null
       };
     });
 
@@ -311,7 +351,8 @@ router.get('/shop/orders', authenticate, async (req, res) => {
     // Fetch order items where the products belong to the owner's shops
     const [matchingItems] = await db.execute(
       `SELECT oi.id, oi.orderId, oi.productId, oi.productName, oi.quantity, oi.unitPrice, oi.subtotal,
-              oi.productUnit, oi.farmerName, oi.location, oi.productImage, oi.status,
+        oi.productUnit, oi.farmerName, oi.location, oi.productImage, oi.status,
+        oi.product_type AS productType,
               o.orderId AS externalOrderId, o.status AS orderStatus, o.totalAmount, o.currency, o.createdAt,
               o.deliveryName, o.deliveryPhone, o.deliveryAddress, o.deliveryDistrict,
               o.userId AS buyerId,
@@ -362,7 +403,9 @@ router.get('/shop/orders', authenticate, async (req, res) => {
 
     if (productIds.length > 0) {
       const [productRows] = await db.execute(
-        `SELECT p.id, sd.shop_name, sd.shop_phone_number, sd.shop_email,
+  `SELECT p.id, sd.shop_name, sd.shop_phone_number, sd.shop_email,
+    sd.shop_address, sd.latitude AS shop_latitude, sd.longitude AS shop_longitude,
+    sd.delivery_areas AS shop_delivery_areas,
                 inv.quantity AS inventory_quantity, inv.unit_price AS inventory_unit_price,
                 inv.unit_type AS inventory_unit_type
          FROM products p
@@ -377,6 +420,10 @@ router.get('/shop/orders', authenticate, async (req, res) => {
           shop_name: row.shop_name,
           shop_phone_number: row.shop_phone_number,
           shop_email: row.shop_email,
+          shop_address: row.shop_address,
+          shop_latitude: row.shop_latitude,
+          shop_longitude: row.shop_longitude,
+          shop_delivery_areas: row.shop_delivery_areas,
           inventory_quantity: row.inventory_quantity,
           inventory_unit_price: row.inventory_unit_price,
           inventory_unit_type: row.inventory_unit_type
@@ -416,6 +463,10 @@ router.get('/shop/orders', authenticate, async (req, res) => {
         shopName: meta.shop_name || null,
         shopPhone: meta.shop_phone_number || null,
         shopEmail: meta.shop_email || null,
+        shopAddress: meta.shop_address || null,
+        shopLatitude: meta.shop_latitude || null,
+        shopLongitude: meta.shop_longitude || null,
+        shopDeliveryAreas: meta.shop_delivery_areas || null,
         inventoryQuantity: meta.inventory_quantity,
         inventoryUnitPrice: meta.inventory_unit_price,
         inventoryUnitType: meta.inventory_unit_type
@@ -652,8 +703,8 @@ router.post('/', authenticate, async (req, res) => {
       const [orderItemResult] = await connection.execute(
         `INSERT INTO order_items (
           orderId, productId, productName, quantity, unitPrice, subtotal,
-          productUnit, farmerName, location, productImage, createdAt, updatedAt, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
+          productUnit, farmerName, location, productImage, product_type, createdAt, updatedAt, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
         [
           newOrderId,
           productId,
@@ -665,6 +716,7 @@ router.post('/', authenticate, async (req, res) => {
           farmerName,
           location,
           productImage,
+          productType,
           'pending' // default status
         ]
       );

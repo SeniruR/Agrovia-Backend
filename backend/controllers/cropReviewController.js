@@ -1,7 +1,14 @@
 const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
-const FileType = require('file-type');
+let FileType;
+try {
+  FileType = require('file-type');
+} catch (e) {
+  FileType = null;
+  console.warn('Optional package "file-type" not installed; attachment MIME detection will use filename extension fallback');
+}
+const mimeTypes = require('mime-types');
 
 /**
  * Get all reviews for a specific crop
@@ -489,10 +496,23 @@ exports.getReviewAttachment = async (req, res) => {
       }
 
   const detectionStream = fs.createReadStream(absolutePath);
-  const mimeType = (await FileType.fromStream(detectionStream)) || { mime: 'application/octet-stream' };
+  let detectedMime = 'application/octet-stream';
+  if (FileType && typeof FileType.fromStream === 'function') {
+    try {
+      const mt = await FileType.fromStream(detectionStream);
+      detectedMime = mt?.mime || detectedMime;
+    } catch (e) {
+      // ignore and fallback
+    }
+  } else {
+    // fallback to extension-based detection
+    const ext = path.extname(absolutePath) || '';
+    const lookup = mimeTypes.lookup(ext) || 'application/octet-stream';
+    detectedMime = lookup;
+  }
   detectionStream.destroy();
 
-  res.setHeader('Content-Type', mimeType.mime);
+  res.setHeader('Content-Type', detectedMime);
       res.setHeader('Content-Disposition', `inline; filename="${path.basename(absolutePath)}"`);
 
       // Need fresh stream because file-type consumed some bytes
@@ -511,8 +531,18 @@ exports.getReviewAttachment = async (req, res) => {
     let mime = target.mimetype;
 
     if (!mime) {
-      const detected = await FileType.fromBuffer(buffer);
-      mime = detected?.mime || 'application/octet-stream';
+      if (FileType && typeof FileType.fromBuffer === 'function') {
+        try {
+          const detected = await FileType.fromBuffer(buffer);
+          mime = detected?.mime || 'application/octet-stream';
+        } catch (e) {
+          mime = 'application/octet-stream';
+        }
+      } else {
+        // fallback to extension-based detection if filename exists
+        const ext = target.filename ? path.extname(target.filename) : '';
+        mime = mimeTypes.lookup(ext) || 'application/octet-stream';
+      }
     }
 
     if (target.filename) {

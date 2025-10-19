@@ -67,6 +67,8 @@ router.use('/knowledge-articles', createArticleRoutes);
 
 router.use('/crop-chats', cropChatRoutes);
 router.use('/transporter-reviews', transporterReviewRoutes);
+// Contact / Support
+router.use('/contact', require('./contact'));
 
 
 // Register admin routes
