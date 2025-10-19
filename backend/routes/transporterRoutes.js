@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { upload } = require('../config/upload');
 const { registerTransporter, getAllTransporters, getTransporterById, updateTransporterPricing } = require('../controllers/transporterController');
-const { authLimiter } = require('../middleware/rateLimiter');
 // You can add validation middleware if you create a Joi schema for transporter
 const { pool } = require('../config/database');
 
@@ -114,7 +113,6 @@ router.post('/suspend/:id', async (req, res) => {
 });
 
 router.post('/register/transporter',
-  authLimiter,
   upload.single('profile_image'),
   registerTransporter
 );
