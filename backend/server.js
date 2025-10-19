@@ -11,7 +11,6 @@ const mimeTypes = require('mime-types');
 
 
 // Import middleware
-const { generalLimiter } = require('./middleware/rateLimiter');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 // Import database
@@ -72,19 +71,6 @@ const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
-
-// Rate limiting: in development we skip the general limiter entirely to avoid noisy 429s
-if (process.env.NODE_ENV === 'development') {
-  // No-op rate limiting in dev
-  app.use((req, res, next) => next());
-} else {
-  // In production/staging apply the general limiter but still skip sensitive profile endpoints
-  app.use((req, res, next) => {
-    const skipPaths = ['/api/v1/users/profile', '/api/v1/auth/profile'];
-    if (skipPaths.includes(req.path)) return next();
-    return generalLimiter(req, res, next);
-  });
-}
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
