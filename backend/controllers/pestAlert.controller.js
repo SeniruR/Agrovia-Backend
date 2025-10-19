@@ -1,5 +1,6 @@
 const PestAlertModel = require('../models/pestAlert.model');
 const { pool } = require('../config/database');
+const NotificationService = require('../services/notificationService');
 
 exports.createPestAlert = async (req, res) => {
   try {
@@ -11,8 +12,21 @@ exports.createPestAlert = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    await PestAlertModel.createPestAlert(userId, pestName, symptoms, severity, recommendations);
-    res.status(201).json({ message: 'Pest alert created successfully' });
+    const pestAlertId = await PestAlertModel.createPestAlert(userId, pestName, symptoms, severity, recommendations);
+
+    try {
+      await NotificationService.createPestAlertNotification({
+        pestAlertId,
+        pestName,
+        severity,
+        symptoms,
+        moderatorId: userId
+      });
+    } catch (notificationError) {
+      console.warn('Failed to dispatch pest alert notifications:', notificationError.message);
+    }
+
+    res.status(201).json({ message: 'Pest alert created successfully', pestAlertId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
