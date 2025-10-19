@@ -26,6 +26,7 @@ const orderRoutes = require('./routes/orders');
 const adminRoutes = require('./routes/adminRoutes');
 const { initSocket } = require('./utils/socket');
 const registerCropChatSocket = require('./sockets/cropChat');
+const registerNotificationSocket = require('./sockets/notifications');
 
 // Create Express app
 const app = express();
@@ -61,6 +62,7 @@ const io = initSocket(httpServer, {
   credentials: true
 });
 registerCropChatSocket(io);
+registerNotificationSocket(io);
 
 app.use(cors(corsOptions));
 
