@@ -6,7 +6,8 @@ const router = express.Router();
 
 router.post('/', authenticate, TransporterReviewsController.createOrUpdate);
 router.get('/order-item/:orderItemId', authenticate, TransporterReviewsController.getForOrderItem);
-router.get('/transporter/:transporterId', authenticate, TransporterReviewsController.getForTransporter);
-router.get('/transporter/:transporterId/summary', authenticate, TransporterReviewsController.getSummary);
+// Public endpoints so marketplace pages can surface transporter feedback without requiring login
+router.get('/transporter/:transporterId', TransporterReviewsController.getForTransporter);
+router.get('/transporter/:transporterId/summary', TransporterReviewsController.getSummary);
 
 module.exports = router;
