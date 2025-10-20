@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   user_id BIGINT UNSIGNED NULL,
   name VARCHAR(255),
   email VARCHAR(255),
+  phone VARCHAR(25),
   type ENUM('feedback','support') NOT NULL,
   category VARCHAR(255),
   message TEXT NOT NULL,

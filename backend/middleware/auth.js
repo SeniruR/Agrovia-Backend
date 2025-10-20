@@ -80,6 +80,53 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// Optional authentication middleware: attaches user when a valid token is present
+const attachUserIfToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    let token = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
+    } else if (req.headers['x-access-token']) {
+      token = req.headers['x-access-token'];
+    }
+
+    if (!token) {
+      return next();
+    }
+
+    try {
+      const decoded = verifyToken(token);
+      const user = await User.findById(decoded.userId);
+      if (!user || !user.is_active) {
+        return next();
+      }
+
+      const userTypeMap = {
+        '0': 'admin',
+        '1': 'farmer',
+        '1.1': 'farmer',
+        '2': 'buyer',
+        '3': 'shop_owner',
+        '4': 'transporter',
+        '5': 'moderator',
+        '5.1': 'main_moderator',
+        '6': 'committee_member'
+      };
+      user.role = userTypeMap[user.user_type?.toString()] || 'unknown';
+      req.user = user;
+      return next();
+    } catch (tokenError) {
+      return next();
+    }
+  } catch (error) {
+    console.error('Optional authentication error:', error);
+    return next();
+  }
+};
+
 // Role-based authorization middleware
 const authorize = (allowedRoles) => {
   return (req, res, next) => {
@@ -128,5 +175,6 @@ module.exports = {
   verifyToken,
   authenticate,
   authorize,
-  requireVerification
+  requireVerification,
+  attachUserIfToken
 };

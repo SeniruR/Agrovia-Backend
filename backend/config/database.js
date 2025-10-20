@@ -161,7 +161,8 @@ const createTables = async (connection) => {
         pesticide_free BOOLEAN DEFAULT FALSE,
         freshly_harvested BOOLEAN DEFAULT FALSE,
         contact_number VARCHAR(20) NOT NULL,
-        email VARCHAR(255),
+  email VARCHAR(255),
+  phone VARCHAR(25),
         images JSON,
         minimum_quantity_bulk VARCHAR(100) NULL,
   status ENUM('active', 'inactive', 'pending', 'rejected', 'deleted', 'sold') DEFAULT 'active',
@@ -273,12 +274,72 @@ const createTables = async (connection) => {
         message TEXT NOT NULL,
         anonymous BOOLEAN DEFAULT FALSE,
         source VARCHAR(100) DEFAULT 'web',
+        status ENUM('pending','responded','discarded') NOT NULL DEFAULT 'pending',
+        response_message TEXT NULL,
+        response_subject VARCHAR(255) NULL,
+        responded_by BIGINT UNSIGNED NULL,
+        responded_at DATETIME NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_contact_type (type),
         INDEX idx_contact_user (user_id),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+        INDEX idx_contact_status (status),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (responded_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+
+    const [contactStatusColumn] = await connection.query(`SHOW COLUMNS FROM contact_messages LIKE 'status'`);
+    if (!contactStatusColumn?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD COLUMN status ENUM('pending','responded','discarded') NOT NULL DEFAULT 'pending' AFTER source`);
+    }
+
+    const [contactPhoneColumn] = await connection.query(`SHOW COLUMNS FROM contact_messages LIKE 'phone'`);
+    if (!contactPhoneColumn?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD COLUMN phone VARCHAR(25) NULL AFTER email`);
+    }
+
+    const [contactResponseMessageColumn] = await connection.query(`SHOW COLUMNS FROM contact_messages LIKE 'response_message'`);
+    if (!contactResponseMessageColumn?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD COLUMN response_message TEXT NULL AFTER status`);
+    }
+
+    const [contactResponseSubjectColumn] = await connection.query(`SHOW COLUMNS FROM contact_messages LIKE 'response_subject'`);
+    if (!contactResponseSubjectColumn?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD COLUMN response_subject VARCHAR(255) NULL AFTER response_message`);
+    }
+
+    const [contactRespondedByColumn] = await connection.query(`SHOW COLUMNS FROM contact_messages LIKE 'responded_by'`);
+    if (!contactRespondedByColumn?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD COLUMN responded_by BIGINT UNSIGNED NULL AFTER response_subject`);
+    }
+
+    const [contactRespondedAtColumn] = await connection.query(`SHOW COLUMNS FROM contact_messages LIKE 'responded_at'`);
+    if (!contactRespondedAtColumn?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD COLUMN responded_at DATETIME NULL AFTER responded_by`);
+    }
+
+    const [contactStatusIndex] = await connection.query(`SHOW INDEX FROM contact_messages WHERE Key_name = 'idx_contact_status'`);
+    if (!contactStatusIndex?.length) {
+      await connection.execute(`ALTER TABLE contact_messages ADD INDEX idx_contact_status (status)`);
+    }
+
+    const [contactRespondedByConstraint] = await connection.query(`
+      SELECT CONSTRAINT_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'contact_messages'
+         AND COLUMN_NAME = 'responded_by'
+         AND REFERENCED_TABLE_NAME = 'users'
+    `);
+    if (!contactRespondedByConstraint?.length) {
+      try {
+        await connection.execute(`ALTER TABLE contact_messages ADD CONSTRAINT fk_contact_messages_responder FOREIGN KEY (responded_by) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE`);
+      } catch (err) {
+        if (!err.message.includes('Duplicate') && !err.message.includes('already exists')) {
+          throw err;
+        }
+      }
+    }
 
     // Ensure legacy schemas upgrade product image columns to LONGBLOB
     const [productImageColumn] = await connection.query(`SHOW COLUMNS FROM products LIKE 'image'`);
