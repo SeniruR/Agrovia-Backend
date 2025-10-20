@@ -239,6 +239,23 @@ async function sendPasswordResetCodeEmail(to, code, expiresInMinutes = 15) {
   await transporter.sendMail(mailOptions);
 }
 
+async function sendContactReplyEmail({ to, name = 'User', subject, message }) {
+  if (!to || !subject || !message) {
+    throw new Error('Missing required contact reply email fields');
+  }
+
+  const mailOptions = {
+    from: process.env.NOTIFY_EMAIL_USER,
+    to,
+    subject,
+    html: `<p>Dear ${name || 'User'},</p>
+      <p>${message.replace(/\n/g, '<br>')}</p>
+      <br><p>Best regards,<br>Agrovia Support Team</p>`
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
 module.exports = {
   sendLogisticsApprovalEmail,
   sendLogisticsRejectionEmail,
@@ -251,5 +268,6 @@ module.exports = {
   sendOrganizationActivationEmail,
   sendOrganizationRemovalEmail,
   sendFarmerRemovalEmail,
-  sendPasswordResetCodeEmail
+  sendPasswordResetCodeEmail,
+  sendContactReplyEmail
 };
