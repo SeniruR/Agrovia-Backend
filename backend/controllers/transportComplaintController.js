@@ -12,8 +12,7 @@ exports.createComplaint = async (req, res, next) => {
       location,
       category,
       orderNumber,
-      deliveryDate,
-      trackingNumber
+      deliveryDate
     } = req.body;
 
     // Combine all uploaded files into a single BLOB array (as Buffer)
@@ -37,7 +36,6 @@ exports.createComplaint = async (req, res, next) => {
       category,
       orderNumber: orderNumber === '' ? null : orderNumber,
       deliveryDate: deliveryDate === '' ? null : deliveryDate,
-      trackingNumber: trackingNumber === '' ? null : trackingNumber,
       attachments,
       userId: actorId || null
     });
